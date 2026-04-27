@@ -278,13 +278,14 @@ main { padding: 22px 22px 120px; max-width: 1100px; margin: 0 0 0 290px; }
   font-size: 14px; line-height: 1.55;
   color: var(--ink);
 }
-.gemini-notes::before {
-  content: "Gemini noted:  ";
+.gemini-notes-label {
   font-family: 'Inter', sans-serif; font-style: normal;
-  font-size: 9.5px; font-weight: 600; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--gold-d); display: inline;
-  margin-right: 4px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--gold-d); display: block;
+  margin-bottom: 4px;
 }
+.gemini-notes.flag-mismatch { border-left-color: var(--terracotta); background: #FCEFEC; }
+.gemini-notes.flag-mismatch .gemini-notes-label { color: var(--terracotta); }
 
 /* ───── label rows ───── */
 .label-row {
@@ -1216,13 +1217,19 @@ function buildCard(v) {
   head.appendChild(pill);
   card.appendChild(head);
 
-  // Render Gemini's overall notes (one block per label that has notes).
+  // Render Gemini's commentary (one block per label that has notes).
+  // If Gemini flagged a content-type mismatch, surface it more prominently.
   for (const lbl of labelOrder) {
     const data = v.labels[lbl];
-    if (!data || !(data.gemini_notes || "").trim()) continue;
+    const text = (data && data.gemini_notes || "").trim();
+    if (!text) continue;
+    const isMismatch = /content[-_ ]?type|but the video is|but this is actually|provided content type/i.test(text);
     const note = document.createElement("div");
-    note.className = "gemini-notes";
-    note.innerHTML = `<strong style="font-family:'Inter',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3);">${esc(lbl)} · </strong>${escHtml(data.gemini_notes)}`;
+    note.className = "gemini-notes" + (isMismatch ? " flag-mismatch" : "");
+    const label = isMismatch
+      ? `${lbl.toUpperCase()} · CONTENT-TYPE MISMATCH`
+      : `${lbl.toUpperCase()} · COMMENTARY FROM GEMINI`;
+    note.innerHTML = `<span class="gemini-notes-label">${esc(label)}</span>${escHtml(text)}`;
     card.appendChild(note);
   }
 
