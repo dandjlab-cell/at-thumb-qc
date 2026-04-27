@@ -286,26 +286,23 @@ main { padding: 22px 22px 120px; max-width: 1100px; margin: 0 0 0 290px; }
 }
 .card[data-hidden="true"] { display: none; }
 
-.no-clean-banner {
-  display: flex; align-items: center; gap: 10px;
-  margin: -18px -22px 14px;
-  padding: 8px 22px;
-  background: var(--terracotta);
-  color: var(--paper);
+/* Inline pill — quieter than a banner, since "no clean source" is the norm
+   for this batch (~96%). Use the metadata row, not a full-width banner. */
+.tag.tag-no-clean {
+  background: var(--paper);
+  color: var(--ink-2);
+  border: 1px dashed var(--rule-strong);
+  padding: 1.5px 8px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 10.5px;
+  font-weight: 500;
   font-family: 'Inter', sans-serif;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
-  text-transform: uppercase;
-  border-bottom: 1px solid color-mix(in srgb, var(--terracotta) 70%, black);
 }
-.no-clean-banner::before {
-  content: "⚠";
-  font-size: 14px; font-weight: 400;
-}
-.no-clean-banner small {
-  font-weight: 500; letter-spacing: 0.04em;
-  text-transform: none; opacity: 0.95;
-  font-size: 11.5px;
-  margin-left: auto;
+.tag.tag-no-clean::before {
+  content: "⚠ ";
+  color: var(--gold-d);
+  font-weight: 400;
 }
 
 .card-head {
@@ -1579,14 +1576,6 @@ function buildCard(v) {
     focusOnSfid(v.sfid);
   });
 
-  if (v.clean_available === false) {
-    const banner = document.createElement("div");
-    banner.className = "no-clean-banner";
-    banner.innerHTML = `<span>No clean source — captioned MP4 only</span>
-      <small>Picks may include text overlay · ask AT for the no-cap master if you need a better thumb</small>`;
-    card.appendChild(banner);
-  }
-
   const head = document.createElement("div");
   head.className = "card-head";
   const h2 = document.createElement("h2");
@@ -1607,6 +1596,11 @@ function buildCard(v) {
   if (v.brand) head.appendChild(mkTag(v.brand, `tag brand-${esc(v.brand)}`));
   if (v.project_id) head.appendChild(mkTag(v.project_id, "tag tag-mono"));
   if (v.source_file_name) head.appendChild(mkTag(v.source_file_name, "tag tag-mono"));
+  if (v.clean_available === false) {
+    const pill = mkTag("no-cap master not available", "tag tag-no-clean");
+    pill.title = "Pipeline didn't find a no-caption variant in Drive — picks may include text overlay";
+    head.appendChild(pill);
+  }
   if (v.parent_folder_link) {
     const fl = document.createElement("a");
     fl.href = v.parent_folder_link; fl.target = "_blank"; fl.rel = "noopener";
