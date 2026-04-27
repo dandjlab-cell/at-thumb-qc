@@ -163,6 +163,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   font-family: 'Inter', sans-serif; cursor: help;
   border: 1.5px solid var(--paper-2);
 }
+.other-pick.me { box-shadow: 0 0 0 1.5px var(--ink); }
 .cand .other-pick {
   position: absolute; bottom: 8px; left: 8px;
   width: 22px; height: 22px; font-size: 9.5px;
@@ -899,6 +900,7 @@ function setPick(sfid, newPick, opts = {}) {
   refreshCard(sfid);
   refreshProgress();
   rebuildJumpList();  // status changed → reflect in sidebar
+  rebuildOthersOverlay();  // refresh "who picked what" badges (including yours)
   // also re-apply filter so a just-picked card hides under "unreviewed"
   applyFilter({ keepFocusOn: sfid });
   saveStateDebounced();
@@ -1303,13 +1305,27 @@ async function refreshSharedFromDrive() {
 }
 
 function rebuildOthersOverlay() {
-  // Re-render the small badges showing other reviewers' picks per video
+  // Re-render the small badges showing every reviewer's picks per video
+  // (including ourselves, so attribution is visible everywhere).
   document.querySelectorAll(".other-picks").forEach(n => n.remove());
   document.querySelectorAll(".cand .other-pick").forEach(n => n.remove());
+
+  // Build a unified list of (email, name, picks). Self first.
+  const allReviewers = [];
+  if (sharedReviewer) {
+    allReviewers.push({
+      email: sharedReviewer.email, name: sharedReviewer.name,
+      picks: state.picks, isMe: true,
+    });
+  }
   for (const [email, data] of Object.entries(sharedOthers)) {
-    const color = colorForEmail(email);
-    const initials = initialsForEmail(email);
-    for (const [sfid, p] of Object.entries(data.picks)) {
+    allReviewers.push({ email, name: data.name, picks: data.picks, isMe: false });
+  }
+
+  for (const r of allReviewers) {
+    const color = colorForEmail(r.email);
+    const initials = initialsForEmail(r.email);
+    for (const [sfid, p] of Object.entries(r.picks || {})) {
       const card = document.querySelector(`.card[data-sfid="${cssEscape(sfid)}"]`);
       if (!card) continue;
       let row = card.querySelector(".other-picks");
@@ -1320,19 +1336,20 @@ function rebuildOthersOverlay() {
         head.parentNode.insertBefore(row, head.nextSibling);
       }
       const badge = document.createElement("span");
-      badge.className = "other-pick";
+      badge.className = "other-pick" + (r.isMe ? " me" : "");
       badge.style.background = color;
-      badge.title = `${data.name} (${email}) — ${p.kind}${p.label ? " " + p.label : ""}${p.rank ? " #" + p.rank : ""}`;
+      badge.title = `${r.name}${r.isMe ? " (you)" : ""} (${r.email}) — ${p.kind}${p.label ? " " + p.label : ""}${p.rank ? " #" + p.rank : ""}`;
       badge.textContent = initials;
       row.appendChild(badge);
 
-      // also tag the specific candidate cell
+      // Tag the specific candidate cell with a corner badge
       if (p.kind === "pick" && p.label) {
         const cand = card.querySelector(`.cand[data-label="${esc(p.label)}"][data-rank="${p.rank}"]`);
         if (cand) {
           const dot = document.createElement("span");
-          dot.className = "other-pick"; dot.style.background = color;
-          dot.title = `${data.name} (${email}) picked rank ${p.rank}`;
+          dot.className = "other-pick" + (r.isMe ? " me" : "");
+          dot.style.background = color;
+          dot.title = `${r.name}${r.isMe ? " (you)" : ""} picked rank ${p.rank}`;
           dot.textContent = initials;
           cand.appendChild(dot);
         }
