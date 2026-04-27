@@ -1,0 +1,4 @@
+qc_thumbs/
+qc_decisions*.json
+*.swp
+.DS_Store

@@ -1,0 +1,1309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<title>Thumbnail QC · A/B mode · pro vs flash</title>
+<style>
+:root {
+  --bg: #0a0d12;
+  --bg-elev: #11161e;
+  --bg-elev-2: #161c25;
+  --border: #232a35;
+  --border-strong: #2f3947;
+  --text: #e6eaf2;
+  --text-dim: #9aa3b2;
+  --text-faint: #5e6878;
+  --accent: #4ea1ff;
+  --accent-pro: #7aa9ff;
+  --accent-flash: #ffb454;
+  --good: #4ade80;
+  --bad: #f87171;
+  --warn: #fbbf24;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", system-ui, sans-serif;
+  background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+/* ───── topbar ───── */
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(10,13,18,0.92); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+  flex-wrap: wrap;
+}
+.topbar h1 {
+  margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  display: flex; align-items: center; gap: 8px;
+}
+.topbar h1 .mode-badge {
+  font-size: 10.5px; background: var(--bg-elev-2); padding: 2px 8px;
+  border-radius: 4px; color: var(--text-dim); font-weight: 500;
+}
+.progress-block {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 280px;
+}
+.progress-bar {
+  flex: 1; height: 6px; background: var(--bg-elev-2); border-radius: 3px;
+  overflow: hidden; position: relative;
+}
+.progress-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent), var(--good));
+  transition: width 0.2s ease; width: 0%;
+}
+.progress-text { font-size: 11.5px; color: var(--text-dim); white-space: nowrap; }
+.progress-text b { color: var(--text); }
+
+.controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+button, .btn {
+  background: var(--bg-elev-2); color: var(--text); border: 1px solid var(--border);
+  padding: 5px 10px; border-radius: 5px; font-size: 11.5px; cursor: pointer;
+  font-family: inherit; transition: background 0.1s, border-color 0.1s;
+}
+button:hover, .btn:hover { background: var(--bg-elev); border-color: var(--border-strong); }
+button.primary { background: #1f4f8f; border-color: #2f6fbf; color: #d8e7ff; }
+button.primary:hover { background: #2660ad; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+.kbd {
+  display: inline-block; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 3px; padding: 0 5px; font-size: 10.5px;
+  font-family: ui-monospace, monospace; color: var(--text-dim);
+  min-width: 18px; text-align: center;
+}
+.save-indicator {
+  font-size: 11px; color: var(--text-faint); white-space: nowrap;
+  display: flex; align-items: center; gap: 5px;
+}
+.save-indicator.saved::before { content: "✓"; color: var(--good); }
+.save-indicator.saving::before { content: "…"; color: var(--warn); }
+
+/* ───── tabs ───── */
+.tabs-row {
+  display: flex; gap: 4px; padding: 0 16px 8px; overflow-x: auto;
+  scrollbar-width: thin;
+}
+.tab {
+  background: transparent; border: 1px solid transparent; color: var(--text-dim);
+  padding: 5px 12px; border-radius: 5px; font-size: 12px; cursor: pointer;
+  white-space: nowrap; font-family: inherit;
+}
+.tab:hover { background: var(--bg-elev); color: var(--text); }
+.tab.active { background: var(--bg-elev-2); color: var(--text); border-color: var(--border-strong); }
+.tab .count { color: var(--text-faint); margin-left: 6px; font-size: 11px; }
+.tab.active .count { color: var(--accent); }
+
+.filter-row {
+  display: flex; gap: 4px; padding: 0 16px 10px; align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+.filter-label { font-size: 11px; color: var(--text-faint); margin-right: 4px; }
+
+/* ───── jump list sidebar ───── */
+.jumprail {
+  position: fixed; top: 110px; left: 12px; width: 240px;
+  max-height: calc(100vh - 130px); overflow-y: auto;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px; z-index: 20;
+  scrollbar-width: thin;
+}
+.jumprail-head {
+  font-size: 10.5px; color: var(--text-faint); padding: 2px 6px 6px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.jumprail-search {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 8px; border-radius: 4px; font-size: 11.5px;
+  font-family: inherit; margin-bottom: 6px;
+}
+.jumprail-search:focus { outline: none; border-color: var(--accent); }
+.jump-item {
+  display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+  border-radius: 4px; cursor: pointer; font-size: 11.5px;
+  color: var(--text-dim); border-left: 3px solid transparent;
+}
+.jump-item:hover { background: var(--bg-elev-2); color: var(--text); }
+.jump-item.active { background: var(--bg-elev-2); color: var(--text); border-left-color: var(--accent); }
+.jump-item .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint);
+  flex: none;
+}
+.jump-item.s-picked .dot { background: var(--good); }
+.jump-item.s-skipped .dot { background: var(--text-faint); }
+.jump-item.s-bad .dot { background: var(--bad); }
+.jump-item.s-either .dot { background: var(--accent); }
+.jump-item .title {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jump-item .yr { font-size: 10px; color: var(--text-faint); font-family: ui-monospace, monospace; }
+.jump-item.hidden { display: none; }
+.jumprail-toggle {
+  background: transparent; border: 0; color: var(--text-faint); cursor: pointer;
+  padding: 0 2px; font-size: 11px;
+}
+.jumprail.collapsed { width: 32px; padding: 6px; }
+.jumprail.collapsed .jumprail-search,
+.jumprail.collapsed .jumprail-head .label,
+.jumprail.collapsed .jump-item { display: none; }
+
+/* ───── main ───── */
+main { padding: 12px 16px 120px; max-width: 1100px; margin: 0 0 0 280px; }
+@media (max-width: 1100px) {
+  .jumprail { display: none; }
+  main { margin: 0 auto; }
+}
+.card {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; margin-bottom: 10px; transition: border-color 0.15s, box-shadow 0.15s;
+  scroll-margin-top: 130px;
+}
+.card.focused {
+  border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent);
+}
+.card.picked { border-left: 3px solid var(--good); padding-left: 11px; }
+.card.skipped { opacity: 0.55; border-left: 3px solid var(--text-faint); padding-left: 11px; }
+.card.bad { border-left: 3px solid var(--bad); padding-left: 11px; }
+.card[data-hidden="true"] { display: none; }
+
+.card-head {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.card-head h2 {
+  margin: 0; font-size: 14px; font-weight: 600; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 200px;
+}
+.tag {
+  background: var(--bg-elev-2); padding: 1.5px 7px; border-radius: 3px;
+  color: var(--text-dim); font-size: 10.5px; font-weight: 500;
+}
+.tag.brand-AT { background: #1c2c4d; color: #93c5fd; }
+.tag.brand-Kitchn { background: #2c1c0a; color: #fbbf24; }
+.tag-mono {
+  font-family: ui-monospace, monospace; color: var(--text-faint); font-size: 10.5px;
+}
+.pick-status {
+  font-size: 10.5px; padding: 2px 7px; border-radius: 3px;
+  background: var(--bg-elev-2); color: var(--text-dim); font-weight: 500;
+  margin-left: auto;
+}
+.pick-status.picked { background: #0e2a18; color: var(--good); }
+.pick-status.skipped { background: #1a1f29; color: var(--text-faint); }
+.pick-status.bad { background: #2a0e0e; color: var(--bad); }
+
+/* ───── label rows ───── */
+.label-row {
+  display: grid; grid-template-columns: 90px 1fr; gap: 10px;
+  align-items: start; margin-top: 6px;
+}
+.label-side {
+  display: flex; flex-direction: column; gap: 2px; padding-top: 6px;
+}
+.label-name {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.label-name.pro { color: var(--accent-pro); }
+.label-name.flash { color: var(--accent-flash); }
+.label-meta { font-size: 10px; color: var(--text-faint); font-family: ui-monospace, monospace; }
+.label-link {
+  font-size: 10.5px; color: var(--text-dim); text-decoration: none;
+  margin-top: 4px;
+}
+.label-link:hover { color: var(--accent); }
+
+.cands {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.cand {
+  position: relative; cursor: pointer; user-select: none;
+  background: var(--bg-elev-2); border: 1.5px solid var(--border);
+  border-radius: 6px; overflow: hidden;
+  transition: border-color 0.1s, transform 0.05s;
+}
+.cand:hover { border-color: var(--border-strong); }
+.cand.picked { border-color: var(--good); box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.25); }
+.cand:active { transform: scale(0.99); }
+.cand-img-wrap {
+  position: relative; aspect-ratio: 9/16; background: #0a0d12;
+  display: block; overflow: hidden;
+}
+.cand-img-wrap img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.cand-img-wrap .ph {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; color: var(--text-faint); font-size: 11px;
+}
+.cand-rank {
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(10,13,18,0.85); backdrop-filter: blur(4px);
+  padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600;
+  font-family: ui-monospace, monospace;
+}
+.cand-key {
+  position: absolute; top: 6px; right: 6px;
+  background: var(--bg); border: 1px solid var(--border-strong);
+  padding: 1px 6px; border-radius: 3px; font-size: 10.5px;
+  font-family: ui-monospace, monospace; color: var(--text-dim);
+}
+.cand.picked .cand-key { background: var(--good); color: #002414; border-color: var(--good); }
+.cand-meta {
+  font-size: 10.5px; color: var(--text-faint); padding: 5px 8px 0;
+  font-family: ui-monospace, monospace;
+}
+.cand-reason {
+  font-size: 11px; color: var(--text-dim); padding: 3px 8px 8px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; line-height: 1.35; cursor: help;
+}
+.cand-reason:hover { -webkit-line-clamp: unset; }
+.cand-zoom {
+  position: absolute; bottom: 6px; right: 6px;
+  background: rgba(10,13,18,0.85); backdrop-filter: blur(4px);
+  width: 24px; height: 24px; border-radius: 4px; display: flex;
+  align-items: center; justify-content: center; font-size: 12px;
+  text-decoration: none; color: var(--text-dim); border: 1px solid var(--border);
+}
+.cand-zoom:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ───── verdict row ───── */
+.verdict-row {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.verdict-btn {
+  background: var(--bg-elev-2); border: 1px solid var(--border);
+  color: var(--text-dim); padding: 4px 10px; border-radius: 5px;
+  font-size: 11.5px; cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.verdict-btn:hover { background: var(--bg-elev); color: var(--text); }
+.verdict-btn.active { background: var(--accent); color: #001a33; border-color: var(--accent); }
+.verdict-btn.bad.active { background: var(--bad); color: #2a0606; border-color: var(--bad); }
+.verdict-btn.skip.active { background: var(--text-faint); color: var(--bg); border-color: var(--text-faint); }
+.verdict-note {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 4px 8px; border-radius: 4px; font-size: 11.5px; font-family: inherit;
+  width: 240px; margin-left: auto;
+}
+.verdict-note:focus { outline: none; border-color: var(--accent); }
+
+/* ───── help overlay ───── */
+.help {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100;
+  display: none; align-items: center; justify-content: center;
+}
+.help.show { display: flex; }
+.help-card {
+  background: var(--bg-elev); border: 1px solid var(--border-strong);
+  border-radius: 10px; padding: 20px 24px; max-width: 520px; width: 90%;
+}
+.help-card h2 { margin: 0 0 12px; font-size: 15px; }
+.help-grid {
+  display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px;
+  font-size: 12px;
+}
+.help-grid .kbd-list { display: flex; gap: 4px; }
+
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--text-faint); font-size: 13px;
+}
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-row">
+    <h1>Thumbnail QC <span class="mode-badge">A/B mode · pro vs flash</span></h1>
+    <div class="progress-block">
+      <div class="progress-bar"><div id="progress-fill" class="progress-bar-fill"></div></div>
+      <div id="progress-text" class="progress-text">0 / 0 reviewed</div>
+    </div>
+    <div class="controls">
+      <span id="save-ind" class="save-indicator saved">saved</span>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-dim)">
+        <input type="checkbox" id="auto-advance"> auto-advance
+      </label>
+      <button id="btn-signin" class="primary" style="display:none" title="Sign in with Google to load thumbnails">🔑 Sign in with Google</button>
+      <span id="signin-status" class="save-indicator" style="display:none"></span>
+      <button id="btn-undo" title="Undo (z)">↶ Undo</button>
+      <button id="btn-redo" title="Redo (shift+z)">↷ Redo</button>
+      <button id="btn-resume" title="Jump to next unreviewed">▸ Resume</button>
+      <button id="btn-save-file" class="primary" title="Save decisions to a file (auto-syncs on every change). Chrome/Edge only.">💾 Save to file…</button>
+      <button id="btn-load-file" title="Load decisions from a previous session">↥ Load…</button>
+      <input id="import-input" type="file" accept="application/json" style="display:none">
+      <button id="btn-export" title="Download a one-off JSON snapshot">Export</button>
+      <button id="btn-help" title="Keyboard help (?)">?</button>
+      <button id="btn-clear" title="Clear all picks">Clear</button>
+    </div>
+  </div>
+  <div id="tabs-row" class="tabs-row"></div>
+  <div id="filter-row" class="filter-row">
+    <span class="filter-label">Show:</span>
+  </div>
+</div>
+<aside id="jumprail" class="jumprail">
+  <div class="jumprail-head">
+    <span class="label">Jump to video</span>
+    <button class="jumprail-toggle" id="jumprail-toggle" title="Collapse">⇤</button>
+  </div>
+  <input id="jumprail-search" class="jumprail-search" placeholder="Search title, project ID…">
+  <div id="jumplist"></div>
+</aside>
+<main id="cards"></main>
+<div id="help" class="help">
+  <div class="help-card">
+    <h2>Keyboard shortcuts</h2>
+    <div class="help-grid">
+      
+        <div><span class="kbd-list"><span class="kbd">1</span><span class="kbd">2</span><span class="kbd">3</span></span></div><div>Pick top row (Pro)</div>
+        <div><span class="kbd-list"><span class="kbd">4</span><span class="kbd">5</span><span class="kbd">6</span></span></div><div>Pick bottom row (Flash)</div>
+        <div><span class="kbd">q</span></div><div>Either column is fine</div>
+        
+      <div><span class="kbd">w</span></div><div>Both bad / no good pick</div>
+      <div><span class="kbd">e</span> or <span class="kbd">s</span></div><div>Skip this video</div>
+      <div><span class="kbd">r</span></div><div>Reset this video's pick</div>
+      <div><span class="kbd">j</span> <span class="kbd">↓</span></div><div>Next video</div>
+      <div><span class="kbd">k</span> <span class="kbd">↑</span></div><div>Previous video</div>
+      <div><span class="kbd">n</span></div><div>Next unreviewed</div>
+      <div><span class="kbd">z</span></div><div>Undo</div>
+      <div><span class="kbd-list"><span class="kbd">⇧</span><span class="kbd">z</span></span></div><div>Redo</div>
+      <div><span class="kbd">?</span></div><div>This help</div>
+    </div>
+    <div style="margin-top:14px;font-size:11.5px;color:var(--text-faint)"><span class='tag tag-mono'>pro: $1.813 · 45s avg</span> <span class='tag tag-mono'>flash: $0.148 · 34s avg</span></div>
+  </div>
+</div>
+<script>
+window.__QC_VIDEOS__ = [{"sfid":"1Kt6iVhfEB6RZZ1nIUrxJ-mRPcEta4x7B","year":"2026","title":"Alliannah H Social Tour v2","brand":"AT","project_id":"2601AT009","source_file_name":"Alliannah H Social Tour CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1KkDptPwpUhB2JIREzl4ZTQfNDaEwbazv","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1vlyHuFiG0o9FFQopaTe3lD_llie0M687","extract_folder_id":"1vlyHuFiG0o9FFQopaTe3lD_llie0M687","n_frames":60,"cost":0.06486375,"gemini_secs":72.89,"candidates":[{"rank":1,"index":7,"timestamp":7.0,"reason":"This is a strong, well-composed shot of a decorated corner that perfectly showcases the apartment's personality. The lighting is good, the subject is interesting, and it represents a 'final result' of a styled space.","file_id":"16mg8QjzI8MQt3vqgFNN7Tx7NaQFYhPyb","drive_link":"https://drive.google.com/file/d/16mg8QjzI8MQt3vqgFNN7Tx7NaQFYhPyb/view?usp=drivesdk","local":null},{"rank":2,"index":57,"timestamp":57.0,"reason":"This is a clean, bright, and wide shot of the bedroom area. It's an inviting image that clearly shows another 'final result' of a decorated space, providing good variety from the first choice.","file_id":"1sfJWNgtxeM3hgLibUZNF3b5N1Wgok-1_","drive_link":"https://drive.google.com/file/d/1sfJWNgtxeM3hgLibUZNF3b5N1Wgok-1_/view?usp=drivesdk","local":null},{"rank":3,"index":37,"timestamp":37.0,"reason":"This frame highlights the artistic and unique decor in the apartment. The large painting on the easel is a compelling focal point, and the shot is sharp and well-lit, showing another 'final result'.","file_id":"1dMEWYua4V73NPQIOKmV2L9AdFtO95VbR","drive_link":"https://drive.google.com/file/d/1dMEWYua4V73NPQIOKmV2L9AdFtO95VbR/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1mkWhFLzzrb1lHkMozLP3LbQPDM0LElra","extract_folder_id":"1mkWhFLzzrb1lHkMozLP3LbQPDM0LElra","n_frames":60,"cost":0.0052714500000000004,"gemini_secs":50.74,"candidates":[{"rank":1,"index":44,"timestamp":44.0,"reason":"This frame provides a wide, clear view of the main living area, showcasing multiple decorated zones and the overall aesthetic, which is ideal for a 'final result' in a home tour/DIY context.","file_id":"1VUxTYbv0IwSQz75gm02PaDz3rfXY8ic2","drive_link":"https://drive.google.com/file/d/1VUxTYbv0IwSQz75gm02PaDz3rfXY8ic2/view?usp=drivesdk","local":null},{"rank":2,"index":37,"timestamp":37.0,"reason":"This frame highlights a specific, highly decorated wall with unique art and shelves filled with eclectic decor, effectively demonstrating the 'final result' of creative styling and DIY elements.","file_id":"15QoJa5v2r1oqinuOgg-WPbn2X2fylOY9","drive_link":"https://drive.google.com/file/d/15QoJa5v2r1oqinuOgg-WPbn2X2fylOY9/view?usp=drivesdk","local":null},{"rank":3,"index":57,"timestamp":57.0,"reason":"This frame offers a clear view of the bedroom area, including the bed with decorative pillows and the checkered rug, representing another distinct and well-decorated space as a 'final result'.","file_id":"1bYFMt7zapaE5MvImSghHtTfqSKwjgOZL","drive_link":"https://drive.google.com/file/d/1bYFMt7zapaE5MvImSghHtTfqSKwjgOZL/view?usp=drivesdk","local":null}]}}},{"sfid":"19X6c2-t6d2oN0uvq3Ub6FsU5TJQAzKrc","year":"2026","title":"BHM Compilation '26","brand":"AT","project_id":"2602AT002","source_file_name":"BHM Compilation '26 CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/16LytTaJ7jqlWV1VSwCduz4ib4r8o8FyG","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/173oB3tHJi6RAdMhgN2-57RlGefeJ3OcF","extract_folder_id":"173oB3tHJi6RAdMhgN2-57RlGefeJ3OcF","n_frames":60,"cost":0.06611500000000001,"gemini_secs":77.13,"candidates":[{"rank":1,"index":26,"timestamp":26.0,"reason":"This is a beautiful, wide establishing shot of a living room with a stunning city view. It's bright, aspirational, and perfectly fits the 'house tour' content type.","file_id":"1yBukH2VpM0rJG4R-Q6iwR44mQthYPIzU","drive_link":"https://drive.google.com/file/d/1yBukH2VpM0rJG4R-Q6iwR44mQthYPIzU/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"This frame is an excellent example of a host greeting the camera at the entryway. The subject is welcoming, in sharp focus, and sets a friendly tone for a tour.","file_id":"1sEgWgA3iqSyMmPWOS4rMFZuTgx-sc_Pu","drive_link":"https://drive.google.com/file/d/1sEgWgA3iqSyMmPWOS4rMFZuTgx-sc_Pu/view?usp=drivesdk","local":null},{"rank":3,"index":36,"timestamp":36.0,"reason":"This is another strong, wide establishing shot of an interior, but with a completely different, cozier aesthetic. The gallery wall and plants show a lot of personality.","file_id":"1nz6ky3STWQB0MNy3cZatrOvzEL_mRH2W","drive_link":"https://drive.google.com/file/d/1nz6ky3STWQB0MNy3cZatrOvzEL_mRH2W/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1nFPdEhnDqnyINNkRgnQSn2xo1BLs0P94","extract_folder_id":"1nFPdEhnDqnyINNkRgnQSn2xo1BLs0P94","n_frames":60,"cost":0.0053058,"gemini_secs":49.29,"candidates":[{"rank":1,"index":26,"timestamp":26.0,"reason":"This frame provides an excellent wide establishing shot of a vibrant living room with a stunning city view, perfectly fitting the 'beautiful wide establishing shot of the apartment interior' rule.","file_id":"1tbP77QUD06bQjay3-x2u6unxfW-sUS1k","drive_link":"https://drive.google.com/file/d/1tbP77QUD06bQjay3-x2u6unxfW-sUS1k/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"This frame features a host greeting the camera at an entryway, which is a preferred scenario for house tour thumbnails. It is sharp, inviting, and clearly shows the host.","file_id":"1Z-B6HpKkPxVpie6eNF2P4jfRcS7mZZhC","drive_link":"https://drive.google.com/file/d/1Z-B6HpKkPxVpie6eNF2P4jfRcS7mZZhC/view?usp=drivesdk","local":null},{"rank":3,"index":35,"timestamp":35.0,"reason":"This frame offers another strong wide establishing shot of a living room, showcasing a distinct and lush aesthetic with a gallery wall and numerous plants, providing good diversity from the other candidates.","file_id":"1qCtG5qePs0eBUGyERUOKLRxu4kf_vXJM","drive_link":"https://drive.google.com/file/d/1qCtG5qePs0eBUGyERUOKLRxu4kf_vXJM/view?usp=drivesdk","local":null}]}}},{"sfid":"1tq7eTkLP4TJp0Qtlq18ioiYb5PXkpn89","year":"2026","title":"Lauren K Social Tour (Cullen Cut)","brand":"AT","project_id":"2601AT014","source_file_name":"Lauren K Social Tour (Cullen Cut) CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1QN58gwEx5z00ZOaqXnMVjeGUPVbWIE7r","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1oJaguJq-EGX1s83ixx6SJP7fFsxmLnVc","extract_folder_id":"1oJaguJq-EGX1s83ixx6SJP7fFsxmLnVc","n_frames":60,"cost":0.06428500000000001,"gemini_secs":54.74,"candidates":[{"rank":1,"index":32,"timestamp":32.0,"reason":"This is an excellent, well-lit, and clear wide shot of the kitchen. It perfectly showcases a key area of the apartment tour, fitting the 'final result' rule.","file_id":"1lNd1G65MyC42lkyBhWUNbBUGYySuZPZg","drive_link":"https://drive.google.com/file/d/1lNd1G65MyC42lkyBhWUNbBUGYySuZPZg/view?usp=drivesdk","local":null},{"rank":2,"index":9,"timestamp":9.0,"reason":"This is a beautiful and well-composed shot of the bedroom, which is the main living space. It shows the decor clearly and the cat adds personality. It's a strong 'final result' frame.","file_id":"1kpVMUsRhQ2e30LoUasvJNd6nGWLt0ztW","drive_link":"https://drive.google.com/file/d/1kpVMUsRhQ2e30LoUasvJNd6nGWLt0ztW/view?usp=drivesdk","local":null},{"rank":3,"index":41,"timestamp":41.0,"reason":"This is a clean, bright, and comprehensive shot of the bathroom. It clearly shows the final, decorated space and provides a good overview of another key room in the tour.","file_id":"1m_7r2-ELL6SeznaWT9bPgjHtMZsFEBbB","drive_link":"https://drive.google.com/file/d/1m_7r2-ELL6SeznaWT9bPgjHtMZsFEBbB/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1YQYIC3Q8vDcKXQ7Wm0lFOtHWMZ94WGCC","extract_folder_id":"1YQYIC3Q8vDcKXQ7Wm0lFOtHWMZ94WGCC","n_frames":60,"cost":0.0053556,"gemini_secs":55.52,"candidates":[{"rank":1,"index":17,"timestamp":17.0,"reason":"This frame provides a wide, clear view of the well-arranged bedroom, showcasing the bed, window, mirror, and closet area, representing a 'final result' of the space setup.","file_id":"1EZfOq3aKuJCyz92mlwa5zCTLpIZIPUdw","drive_link":"https://drive.google.com/file/d/1EZfOq3aKuJCyz92mlwa5zCTLpIZIPUdw/view?usp=drivesdk","local":null},{"rank":2,"index":39,"timestamp":39.0,"reason":"This frame offers a clear view inside the kitchen cabinets, highlighting the organized mugs, plates, and glasses, which is an excellent 'final result' of kitchen organization.","file_id":"1VwmAbKVP8T5i9xFS7qJRX68IoLat6P9Z","drive_link":"https://drive.google.com/file/d/1VwmAbKVP8T5i9xFS7qJRX68IoLat6P9Z/view?usp=drivesdk","local":null},{"rank":3,"index":49,"timestamp":49.0,"reason":"This frame presents a comprehensive view of the compact bathroom, including the sink, toilet, shower, and even a cat litter box, effectively showing the 'final result' of the room's arrangement.","file_id":"1YV7HrjYQ_tb52vjQAkpinFWa8-fgOFy6","drive_link":"https://drive.google.com/file/d/1YV7HrjYQ_tb52vjQAkpinFWa8-fgOFy6/view?usp=drivesdk","local":null}]}}},{"sfid":"1Ikrn6WX-JGaGJdqkZWx4x7C20LXInMlK","year":"2026","title":"Nadin A Social Tour","brand":"AT","project_id":"2601AT003","source_file_name":"Nadin A Social Tour CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1eHZxZEjZGcPlCBWQPq8z0QGToJuhRnce","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1rfdNPJRuNfDjRN-_dFIcLBV6RkYABibw","extract_folder_id":"1rfdNPJRuNfDjRN-_dFIcLBV6RkYABibw","n_frames":60,"cost":0.06525,"gemini_secs":60.46,"candidates":[{"rank":1,"index":35,"timestamp":35.0,"reason":"This is an excellent 'final result' shot. It shows the DIY cat-friendly space being enjoyed by both the person and the cat, which tells a complete story. The composition is strong and the moment is heartwarming.","file_id":"1jFXiFenHVoOZpsjbIOsuI6qCD4kL8Oe9","drive_link":"https://drive.google.com/file/d/1jFXiFenHVoOZpsjbIOsuI6qCD4kL8Oe9/view?usp=drivesdk","local":null},{"rank":2,"index":27,"timestamp":27.0,"reason":"This wide shot clearly displays the final result of the DIY project, showing the extensive network of cat shelves and furniture integrated into the living room. It's a great establishing shot of the transformed space.","file_id":"1XEIGOD5BfJ5CTHNvsK5YwUJbZ2JkGTOc","drive_link":"https://drive.google.com/file/d/1XEIGOD5BfJ5CTHNvsK5YwUJbZ2JkGTOc/view?usp=drivesdk","local":null},{"rank":3,"index":48,"timestamp":48.0,"reason":"This is a clean, appealing shot of a cat enjoying one of the specific DIY elements (the window hammock). It highlights the success of the project from the cat's perspective and is a very cute, engaging image.","file_id":"1o3foWbJ0OMh3ozObA_w5XNEsLx8YyufW","drive_link":"https://drive.google.com/file/d/1o3foWbJ0OMh3ozObA_w5XNEsLx8YyufW/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Nw6zZvH3kyCKPK4mOkOdYU2baURWHYuw","extract_folder_id":"1Nw6zZvH3kyCKPK4mOkOdYU2baURWHYuw","n_frames":60,"cost":0.0053586,"gemini_secs":48.79,"candidates":[{"rank":1,"index":33,"timestamp":33.0,"reason":"This frame clearly shows a cat utilizing the wall-mounted cat shelves, which is a key DIY accomplishment of the video, and is sharp with good framing.","file_id":"1HgS9TxeD12Cr3gCZDhzOmnEJXYaWclY1","drive_link":"https://drive.google.com/file/d/1HgS9TxeD12Cr3gCZDhzOmnEJXYaWclY1/view?usp=drivesdk","local":null},{"rank":2,"index":44,"timestamp":44.0,"reason":"This frame provides a comprehensive view of the dedicated cat litter room, showcasing a significant DIY setup for cat care, and is sharp and graphics-free.","file_id":"17JFtU9aFPZ2cfgG-v_qy3SvmCgNfy91n","drive_link":"https://drive.google.com/file/d/17JFtU9aFPZ2cfgG-v_qy3SvmCgNfy91n/view?usp=drivesdk","local":null},{"rank":3,"index":3,"timestamp":3.0,"reason":"This wide shot of the living room effectively captures multiple cat-friendly installations like cat trees and wall shelves, representing the overall 'final result' of the DIY efforts.","file_id":"1UOjdrko2-LrECTdKO5t7TQswK4H528xJ","drive_link":"https://drive.google.com/file/d/1UOjdrko2-LrECTdKO5t7TQswK4H528xJ/view?usp=drivesdk","local":null}]}}},{"sfid":"1Vr-xw3z0GmNo6dsQ3NeWgc8ZAQPiWJ9t","year":"2026","title":"Nadin A Space Solution","brand":"AT","project_id":"2601AT003","source_file_name":"Nadin A Space Solution CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1eHZxZEjZGcPlCBWQPq8z0QGToJuhRnce","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1glNTsH-ZFVKzNWudkCnBib3zb1xqOUue","extract_folder_id":"1glNTsH-ZFVKzNWudkCnBib3zb1xqOUue","n_frames":18,"cost":0.0215825,"gemini_secs":28.94,"candidates":[{"rank":1,"index":8,"timestamp":8.0,"reason":"This is the best 'final result' shot. It clearly and widely frames the coffee nook, which is the main subject of the space solution, making it an ideal thumbnail for a DIY video.","file_id":"1RxKRZs-dtZfOpV_U35qi9MmnBL1VQ7EH","drive_link":"https://drive.google.com/file/d/1RxKRZs-dtZfOpV_U35qi9MmnBL1VQ7EH/view?usp=drivesdk","local":null},{"rank":2,"index":4,"timestamp":4.0,"reason":"This is a strong 'after' shot showing the decorated and personalized main kitchen area. It's visually appealing and contrasts well with the empty 'before' state.","file_id":"1gUe1DaFkqMe2MtkuR1jN0e99erc2fic7","drive_link":"https://drive.google.com/file/d/1gUe1DaFkqMe2MtkuR1jN0e99erc2fic7/view?usp=drivesdk","local":null},{"rank":3,"index":3,"timestamp":3.0,"reason":"This is the most comprehensive 'before' shot, showing the empty kitchen. It provides clear context for the transformation that takes place in the video.","file_id":"1YgRQAfxKFjia12FUBoSQbCq2YmbVtfyZ","drive_link":"https://drive.google.com/file/d/1YgRQAfxKFjia12FUBoSQbCq2YmbVtfyZ/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1vztne1xQ5RIWoXfukvRmRNI7kkLCz_ri","extract_folder_id":"1vztne1xQ5RIWoXfukvRmRNI7kkLCz_ri","n_frames":18,"cost":0.0017055,"gemini_secs":22.18,"candidates":[{"rank":1,"index":8,"timestamp":8.0,"reason":"This frame clearly shows the 'after' state of a dedicated coffee station, representing a significant space solution and final result of the DIY project.","file_id":"1SJtpiezASBXCJ1E6KhHd027Oo1iXsVXa","drive_link":"https://drive.google.com/file/d/1SJtpiezASBXCJ1E6KhHd027Oo1iXsVXa/view?usp=drivesdk","local":null},{"rank":2,"index":4,"timestamp":4.0,"reason":"This frame captures the 'after' state of the main kitchen area, showcasing the decorated counter and stove, providing a clear contrast to the 'before' state.","file_id":"1nr4CZhslYStf-UuGzI-WyQKzA_ZcVeE0","drive_link":"https://drive.google.com/file/d/1nr4CZhslYStf-UuGzI-WyQKzA_ZcVeE0/view?usp=drivesdk","local":null},{"rank":3,"index":3,"timestamp":3.0,"reason":"This frame provides the best 'before' shot of the kitchen, showing the clean, empty space with major appliances, which is essential for a clear before/after contrast in a DIY video.","file_id":"165skmvb0jAJXYF4VhFkCT9NQgXkmKBS7","drive_link":"https://drive.google.com/file/d/165skmvb0jAJXYF4VhFkCT9NQgXkmKBS7/view?usp=drivesdk","local":null}]}}},{"sfid":"15NAJoOHfGoEd2MmaF1Ueo-wpq-pHGJA8","year":"2026","title":"Natalie F Social Tour","brand":"AT","project_id":"2601AT001","source_file_name":"Natalie F Social Tour.mp4","parent_folder_link":"https://drive.google.com/drive/folders/15PUE_xX73qPkZDdKqBLVOOB-tGiEnSQQ","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1i6rlrf2fgcafQQaMTC3CGYEmr_mnxR2l","extract_folder_id":"1i6rlrf2fgcafQQaMTC3CGYEmr_mnxR2l","n_frames":60,"cost":0.0634125,"gemini_secs":68.21,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is one of only two frames without a text overlay. It features the host looking toward the camera, creating an inviting and intriguing opening shot.","file_id":"18dCX7qTx7Ie5L-hX_6tMkkC3SCj6wlnT","drive_link":"https://drive.google.com/file/d/18dCX7qTx7Ie5L-hX_6tMkkC3SCj6wlnT/view?usp=drivesdk","local":null},{"rank":2,"index":59,"timestamp":59.0,"reason":"This is the only other frame that meets the hard constraint of having no text. It's a clean, well-lit shot that shows the kitchen space and the host interacting with it.","file_id":"1riO-9IZ_e35L3AG5WZ0GjYCrC_w6UvXg","drive_link":"https://drive.google.com/file/d/1riO-9IZ_e35L3AG5WZ0GjYCrC_w6UvXg/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/10FqGHGgF0nbCt_8anoaKmBkrtkI1HHjK","extract_folder_id":"10FqGHGgF0nbCt_8anoaKmBkrtkI1HHjK","n_frames":60,"cost":0.005106899999999999,"gemini_secs":43.78,"candidates":[]}}},{"sfid":"1GJBZwMDyCsVAYQE1EK9bxeVVX5cZuYnB","year":"2026","title":"Priya Gopi HT Finals - 021926 APARTMENT THERAPY Priya Gopi Fahnon Bennett SOCIAL 2 v2","brand":"AT","project_id":"2602AT001","source_file_name":"021926_APARTMENT_THERAPY_Priya_Gopi_Fahnon_Bennett-SOCIAL-2-v2.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1QVwyPlhlTVFUiWCLKEkI4X8PV7wGSo57","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1znPzan-01vXHZGF4CXittOomfOqJ3kv7","extract_folder_id":"1znPzan-01vXHZGF4CXittOomfOqJ3kv7","n_frames":60,"cost":0.06263374999999999,"gemini_secs":56.36,"candidates":[]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1hYSPBQ98OYQCJfwNtkMCPdWo8o1Hw8ow","extract_folder_id":"1hYSPBQ98OYQCJfwNtkMCPdWo8o1Hw8ow","n_frames":60,"cost":0.0051166499999999995,"gemini_secs":37.09,"candidates":[]}}},{"sfid":"1b6dz7bwhVP1x3f7FgjTds4n_URpooLE-","year":"2026","title":"Spring Homes Compilation AUDIO Only","brand":"AT","project_id":"2603AT011","source_file_name":"Spring Homes Compilation_CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/18ORkGTP6HrsNqGXwL9aIsCC4leMKjP5-","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1qevZnUcQLIq8cM1TnpNoDnTIxMt6qrw9","extract_folder_id":"1qevZnUcQLIq8cM1TnpNoDnTIxMt6qrw9","n_frames":8,"cost":0.01136,"gemini_secs":23.54,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is a beautiful, well-composed shot of a living room. The vibrant colors, soft lighting, and clean composition make it an excellent hero frame.","file_id":"18rM_wsMFBLme1PaoyN7L8hpy0AAetkyH","drive_link":"https://drive.google.com/file/d/18rM_wsMFBLme1PaoyN7L8hpy0AAetkyH/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This is a very striking and unique bedroom shot. The combination of the colorful patterns, rattan headboard, and wall mural is visually interesting and memorable.","file_id":"10gfOzcZDrJIrUFPix26LZH_PrRbPKR_u","drive_link":"https://drive.google.com/file/d/10gfOzcZDrJIrUFPix26LZH_PrRbPKR_u/view?usp=drivesdk","local":null},{"rank":3,"index":6,"timestamp":6.0,"reason":"The sheer volume of plants creates a lush and impressive 'jungalow' aesthetic that is very popular and eye-catching. The disco ball adds a fun, unique detail.","file_id":"1LQk3DaDddamSzjZds_XtExJIRkrguFD3","drive_link":"https://drive.google.com/file/d/1LQk3DaDddamSzjZds_XtExJIRkrguFD3/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1ZYijlP2OT05KkoA1JVFVIyxUCG3hXvec","extract_folder_id":"1ZYijlP2OT05KkoA1JVFVIyxUCG3hXvec","n_frames":8,"cost":0.000918,"gemini_secs":13.18,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame presents a vibrant, well-lit living room with a clear focal point, strong colors, and an inviting atmosphere, making it a strong 'beautiful space' hero shot.","file_id":"1NPPaTzZYvEHISUuQs-jwd0OdNeqZwvKt","drive_link":"https://drive.google.com/file/d/1NPPaTzZYvEHISUuQs-jwd0OdNeqZwvKt/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This frame showcases a unique and colorful bedroom with distinctive wall art and patterned bedding, offering a visually striking and diverse 'beautiful space' compared to other rooms.","file_id":"14YcZ5i_jUhMipVeGKLnBZubEsKbRcuiy","drive_link":"https://drive.google.com/file/d/14YcZ5i_jUhMipVeGKLnBZubEsKbRcuiy/view?usp=drivesdk","local":null},{"rank":3,"index":3,"timestamp":3.0,"reason":"This frame features a charming dining nook with a bold green and white striped wall, a beautifully set table, and warm sunlight, providing another distinct and appealing 'beautiful space' for the compilation.","file_id":"11a26eWMP-ysfivJ85z_XZ0gbmWfqIaxh","drive_link":"https://drive.google.com/file/d/11a26eWMP-ysfivJ85z_XZ0gbmWfqIaxh/view?usp=drivesdk","local":null}]}}},{"sfid":"1zPNMYRUT6AP0UO6PgJK-BedzWHQQPB_a","year":"2026","title":"Windowless Kitchen Sink Ideas","brand":"AT","project_id":"2601AT008","source_file_name":"Windowless Kitchen Sink Ideas CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1R-BpOoIo53IE97KqX0LlxvQ-SyMs7Crx","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1x22hP-zUG1voKSuWsT68ocvcai8bBMPi","extract_folder_id":"1x22hP-zUG1voKSuWsT68ocvcai8bBMPi","n_frames":29,"cost":0.03303875,"gemini_secs":44.3,"candidates":[{"rank":1,"index":20,"timestamp":20.0,"reason":"This is a bright, colorful, and well-composed shot showing a clear design idea (pink tile). It's an excellent example of a final result and is very eye-catching.","file_id":"10J1-SI65WXk6JCpg-Sn_1NBxht3PADJz","drive_link":"https://drive.google.com/file/d/10J1-SI65WXk6JCpg-Sn_1NBxht3PADJz/view?usp=drivesdk","local":null},{"rank":2,"index":11,"timestamp":11.0,"reason":"This frame showcases a different, modern aesthetic with a farmhouse sink and stylishly decorated open shelves. It's a clean, aspirational 'after' shot that fits the video's theme.","file_id":"1L5MCo1MQrW25FIsPODc0QfKzp4Em2_Rz","drive_link":"https://drive.google.com/file/d/1L5MCo1MQrW25FIsPODc0QfKzp4Em2_Rz/view?usp=drivesdk","local":null},{"rank":3,"index":8,"timestamp":8.0,"reason":"This shot provides stylistic variety, featuring a more traditional/cottagecore look with a sink skirt and patterned wallpaper. The 'idea' is very clear and distinct from the other candidates.","file_id":"1JQzSldZiFgb6qkUBu7hC7p-GjknNUqJi","drive_link":"https://drive.google.com/file/d/1JQzSldZiFgb6qkUBu7hC7p-GjknNUqJi/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1sL2U7xiVSpJUoeM2YgI1G4131qallPCt","extract_folder_id":"1sL2U7xiVSpJUoeM2YgI1G4131qallPCt","n_frames":29,"cost":0.00278445,"gemini_secs":29.64,"candidates":[{"rank":1,"index":11,"timestamp":11.0,"reason":"This frame clearly showcases a modern, well-organized kitchen sink area with decorative open shelving, representing a complete 'idea' for a windowless kitchen.","file_id":"1XcO6wcMhO0kX6wgoFJiVTExf3iN_lea9","drive_link":"https://drive.google.com/file/d/1XcO6wcMhO0kX6wgoFJiVTExf3iN_lea9/view?usp=drivesdk","local":null},{"rank":2,"index":26,"timestamp":26.0,"reason":"This frame offers a distinct aesthetic with a bold black and white striped backsplash and a compact layout, providing another unique 'idea' for a kitchen sink area.","file_id":"1Ks3lisd8cG1yAOt2Vzw7SuuFX5-Ig7gs","drive_link":"https://drive.google.com/file/d/1Ks3lisd8cG1yAOt2Vzw7SuuFX5-Ig7gs/view?usp=drivesdk","local":null},{"rank":3,"index":8,"timestamp":8.0,"reason":"This frame presents a different style with dark blue cabinets, a patterned backsplash, and a charming sink skirt, offering a diverse 'idea' compared to the other selections.","file_id":"1P9AEOtgpSNLHiM928Itqe75XbPEMKGmE","drive_link":"https://drive.google.com/file/d/1P9AEOtgpSNLHiM928Itqe75XbPEMKGmE/view?usp=drivesdk","local":null}]}}},{"sfid":"15NbA1h-AtqVkKoROzCysHI2oBYDZB9FR","year":"2026","title":"1 Ing Spaghetti Sauce Upgrade v2","brand":"Kitchn","project_id":"2601K013","source_file_name":"1-Ing Spaghetti Sauce Upgrade CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1tOORGViI9C60mSY3SYPU4HczTAUy3IVJ","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1hBHozSIPsCsE-acsAhV_JKN1S2ona5wv","extract_folder_id":"1hBHozSIPsCsE-acsAhV_JKN1S2ona5wv","n_frames":21,"cost":0.024023750000000003,"gemini_secs":45.46,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is a perfect beauty shot of the final plated dish. It's appetizing, sharp, and follows all the rules for a recipe thumbnail.","file_id":"1gIU9BXpIT4YBxRCgAwFo21TVRK8tSkE3","drive_link":"https://drive.google.com/file/d/1gIU9BXpIT4YBxRCgAwFo21TVRK8tSkE3/view?usp=drivesdk","local":null},{"rank":2,"index":4,"timestamp":4.0,"reason":"This is a clean, sharp shot of a key ingredient. It avoids the 'hands in action' rule and creates curiosity about the recipe 'upgrade'.","file_id":"1LKNp8bcSbINktZYPDP1L41Vsm8W1XLQZ","drive_link":"https://drive.google.com/file/d/1LKNp8bcSbINktZYPDP1L41Vsm8W1XLQZ/view?usp=drivesdk","local":null},{"rank":3,"index":20,"timestamp":20.0,"reason":"This frame clearly shows someone enjoying the final dish. It's a sharp, engaging shot that works as an alternative to a static beauty shot.","file_id":"1rfr4Np0D_wl8QoMM1T0Ai_5JkOu9nitz","drive_link":"https://drive.google.com/file/d/1rfr4Np0D_wl8QoMM1T0Ai_5JkOu9nitz/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/13RAtautnuSThDM8yo4xcK0WeR2Y6xrMs","extract_folder_id":"13RAtautnuSThDM8yo4xcK0WeR2Y6xrMs","n_frames":21,"cost":0.00193245,"gemini_secs":21.41,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame is a clear beauty shot of the plated finished dish, showcasing the spaghetti with sauce, peppers, and cheese, with a fork lifting some pasta, adhering to the preference for a hero shot of the final food.","file_id":"1kXONid99fdTCduSDhUng8sVlRLz9ZUeD","drive_link":"https://drive.google.com/file/d/1kXONid99fdTCduSDhUng8sVlRLz9ZUeD/view?usp=drivesdk","local":null},{"rank":2,"index":18,"timestamp":18.0,"reason":"This frame is another excellent beauty shot of the plated finished dish, very similar to the first candidate but from a distinct shot, showing the appetizing spaghetti with sauce, peppers, and cheese, with a fork lifting pasta.","file_id":"11V7izHrDFlaqkUwFHqhdWvRhHl-ZOn5j","drive_link":"https://drive.google.com/file/d/11V7izHrDFlaqkUwFHqhdWvRhHl-ZOn5j/view?usp=drivesdk","local":null}]}}},{"sfid":"19ogbHb3ie0dlimWJXhh-y6tsZK4rNGgQ","year":"2026","title":"BlueberrySwimBiscuits Final Mus Cap","brand":"Kitchn","project_id":"2603K005","source_file_name":"BlueberrySwimBiscuits_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1sXJwNibJKxIPw8TbYhtsW2nfkhOGew74","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1HXCP_QXjWljkZYt-kmkfqEMabcRBgqWy","extract_folder_id":"1HXCP_QXjWljkZYt-kmkfqEMabcRBgqWy","n_frames":32,"cost":0.03450875,"gemini_secs":42.85,"candidates":[{"rank":1,"index":31,"timestamp":31.0,"reason":"This is a perfect 'beauty moment' of the plated, finished dish. It's well-lit, sharp, and clearly shows the final recipe as described in the rules.","file_id":"14EOVdfiwrFUp8a9x75XhGeMzvQMXjTl3","drive_link":"https://drive.google.com/file/d/14EOVdfiwrFUp8a9x75XhGeMzvQMXjTl3/view?usp=drivesdk","local":null},{"rank":2,"index":6,"timestamp":6.0,"reason":"This is another excellent hero shot of the plated dish. It's a tighter close-up that highlights the texture of the biscuit and the icing.","file_id":"175T9FEQShsZhLqRijYZAF-GcKR5wyD70","drive_link":"https://drive.google.com/file/d/175T9FEQShsZhLqRijYZAF-GcKR5wyD70/view?usp=drivesdk","local":null},{"rank":3,"index":5,"timestamp":5.0,"reason":"This frame shows the entire dish fresh from the oven (pre-icing). It's a great hero shot that provides context for the final plated slice.","file_id":"1vFn_zHkqIJPK4hdEu7-XDWjWE3KqDE47","drive_link":"https://drive.google.com/file/d/1vFn_zHkqIJPK4hdEu7-XDWjWE3KqDE47/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1JaWa_1ZLWISL9UXVG7e83uNRKZoUTpUx","extract_folder_id":"1JaWa_1ZLWISL9UXVG7e83uNRKZoUTpUx","n_frames":32,"cost":0.00287805,"gemini_secs":30.46,"candidates":[{"rank":1,"index":6,"timestamp":6.0,"reason":"This frame is a perfect hero shot of a single, beautifully plated and iced slice of the blueberry cake, showcasing the final product clearly and appealingly.","file_id":"1BN8sPbf00dLVo8tByzKVkd0VBKjGoqph","drive_link":"https://drive.google.com/file/d/1BN8sPbf00dLVo8tByzKVkd0VBKjGoqph/view?usp=drivesdk","local":null},{"rank":2,"index":30,"timestamp":30.0,"reason":"This frame captures the entire baked blueberry cake being drizzled with icing, presenting a 'hero shot' of the complete recipe before serving. Although mid-action, it's the final garnish and a strong beauty moment.","file_id":"1aiUWis8AhqgWFvvCD2TexzXyDyWmzrOt","drive_link":"https://drive.google.com/file/d/1aiUWis8AhqgWFvvCD2TexzXyDyWmzrOt/view?usp=drivesdk","local":null},{"rank":3,"index":2,"timestamp":2.0,"reason":"This frame shows two pieces of the iced blueberry cake on a plate, offering a clean, plated beauty shot with a slightly different composition than a single slice.","file_id":"1Ip2NcofLzq-eeMgSszTGY90nqsQTlWw0","drive_link":"https://drive.google.com/file/d/1Ip2NcofLzq-eeMgSszTGY90nqsQTlWw0/view?usp=drivesdk","local":null}]}}},{"sfid":"1OtgOk62kYcHfs0ddG9Pg-3uTTnSIbUle","year":"2026","title":"Broma Bakery's ice cream vs gelato FINAL","brand":"Kitchn","project_id":"2602K014","source_file_name":"Broma Bakery's ice cream vs gelato_CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1b542HpKXo0MtLjXS7RSZHiMn4kK87xl4","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1tbc0fOz1tylBIEqPkqBK-3o8Vp7GhEmE","extract_folder_id":"1tbc0fOz1tylBIEqPkqBK-3o8Vp7GhEmE","n_frames":48,"cost":0.0526625,"gemini_secs":46.54,"candidates":[{"rank":1,"index":47,"timestamp":47.0,"reason":"This is the only frame that shows the finished dish, which is the top priority for a recipe video. It's a clear, appealing beauty shot of the food.","file_id":"1TsE72znJcNqGNXeXkvNKG7mh-c8-MDMP","drive_link":"https://drive.google.com/file/d/1TsE72znJcNqGNXeXkvNKG7mh-c8-MDMP/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"This is a good establishing shot from the main talking segment. The host has a welcoming expression, and the frame is clean and well-composed.","file_id":"1akb1wtPs5e76TmErkzzrylc3SaWuOejg","drive_link":"https://drive.google.com/file/d/1akb1wtPs5e76TmErkzzrylc3SaWuOejg/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1o9FL2wzfdM3RgPsapfWF1d7ekgSYO2KL","extract_folder_id":"1o9FL2wzfdM3RgPsapfWF1d7ekgSYO2KL","n_frames":48,"cost":0.004119899999999999,"gemini_secs":43.85,"candidates":[{"rank":1,"index":47,"timestamp":47.0,"reason":"This frame shows a direct action related to the recipe, with the woman pouring liquid into a cup, which is the closest to a 'beauty moment' or 'completed recipe' step available in the video.","file_id":"1kHttbl7tBIXzkaydfKYwgBejNtrDpbO3","drive_link":"https://drive.google.com/file/d/1kHttbl7tBIXzkaydfKYwgBejNtrDpbO3/view?usp=drivesdk","local":null},{"rank":2,"index":4,"timestamp":4.0,"reason":"This frame features the presenter with an engaging expression and clear hand gestures, making it a strong and inviting thumbnail.","file_id":"1NcwTi58ae2cOgxuTFMSTYlzmQrnwFP0C","drive_link":"https://drive.google.com/file/d/1NcwTi58ae2cOgxuTFMSTYlzmQrnwFP0C/view?usp=drivesdk","local":null},{"rank":3,"index":22,"timestamp":22.0,"reason":"This frame captures the presenter making an emphatic point with a clear expression and distinct pose, offering a different engaging moment from the video.","file_id":"1Lk83gLBddSbdgcBi_guo5R7vCK_aTB2U","drive_link":"https://drive.google.com/file/d/1Lk83gLBddSbdgcBi_guo5R7vCK_aTB2U/view?usp=drivesdk","local":null}]}}},{"sfid":"1vKTD0f-urTU6X7tz1qcFZj2lkaEFcXYZ","year":"2026","title":"BruleedMango Final Mus Cap","brand":"Kitchn","project_id":"2601K020","source_file_name":"BruleedMango_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1MDhwwMR0LdeZy4yoKWuR8X-gGoKaVKJW","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/123jTjOGbbDDjH5fl7TUwkW32-1VPTAPn","extract_folder_id":"123jTjOGbbDDjH5fl7TUwkW32-1VPTAPn","n_frames":24,"cost":0.02766875,"gemini_secs":40.41,"candidates":[{"rank":1,"index":19,"timestamp":19.0,"reason":"This is a perfect beauty shot of the plated, finished dish. It's clean, well-lit, appetizing, and free of distracting hands or action, which perfectly fits the rules.","file_id":"1fA4SULHI3uUsZG9l9sCwaZYFZtH_GEtL","drive_link":"https://drive.google.com/file/d/1fA4SULHI3uUsZG9l9sCwaZYFZtH_GEtL/view?usp=drivesdk","local":null},{"rank":2,"index":13,"timestamp":13.0,"reason":"This is a strong hero shot of the main component\u2014the br\u00fbl\u00e9ed mango. The glistening, caramelized crust is visually appealing and clearly communicates the recipe's technique.","file_id":"16-mWXwpgmm3gVK1OV3Np4SSGj7VA-52o","drive_link":"https://drive.google.com/file/d/16-mWXwpgmm3gVK1OV3Np4SSGj7VA-52o/view?usp=drivesdk","local":null},{"rank":3,"index":23,"timestamp":23.0,"reason":"This extreme close-up of the 'first bite' is very enticing and highlights the delicious texture of the final dish. It offers a different, more dynamic perspective than the other candidates.","file_id":"1RiIzFenrdEnw-fWQd1hV2FsoEz4amhtq","drive_link":"https://drive.google.com/file/d/1RiIzFenrdEnw-fWQd1hV2FsoEz4amhtq/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1fMJio3iI_s1JUTZeIvqR5L34fw8vJGT7","extract_folder_id":"1fMJio3iI_s1JUTZeIvqR5L34fw8vJGT7","n_frames":24,"cost":0.00217365,"gemini_secs":26.86,"candidates":[{"rank":1,"index":19,"timestamp":19.0,"reason":"This frame perfectly captures the plated finished dish with the caramelized mango and a scoop of vanilla ice cream, free of hands or motion blur, making it an ideal beauty moment.","file_id":"1uM2liRrZCLr-iLx5V1cV16AlCOUIGXKu","drive_link":"https://drive.google.com/file/d/1uM2liRrZCLr-iLx5V1cV16AlCOUIGXKu/view?usp=drivesdk","local":null},{"rank":2,"index":13,"timestamp":13.0,"reason":"This frame provides a clear, sharp hero shot of the caramelized mango on the baking sheet, showcasing the 'bruleed' aspect of the recipe before plating, without any hands or distractions.","file_id":"1vkPVBWJM_1m5gkh4pwpc221cgTt7qzCV","drive_link":"https://drive.google.com/file/d/1vkPVBWJM_1m5gkh4pwpc221cgTt7qzCV/view?usp=drivesdk","local":null},{"rank":3,"index":0,"timestamp":0.0,"reason":"This frame shows the dynamic process of caramelizing the mango with a torch, highlighting a key step of the recipe in an appealing way, without hands mid-action or being an ingredient-prep shot.","file_id":"1XSe6Zw3BhrnKbRkCjR2AL_FhiVxEWk7J","drive_link":"https://drive.google.com/file/d/1XSe6Zw3BhrnKbRkCjR2AL_FhiVxEWk7J/view?usp=drivesdk","local":null}]}}},{"sfid":"18qZIQC6lL5RevLYWwTt4Y_h7bCd0ilbA","year":"2026","title":"BruleedSweetPotatoes Final Mus Cap","brand":"Kitchn","project_id":"2603K007","source_file_name":"BruleedSweetPotatoes_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/16tBl3LqAhdjxVFyf35cTrxdccGAutaLj","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1uePTIny7KyHMlE2FxVb-WjMoQQ7g-WVX","extract_folder_id":"1uePTIny7KyHMlE2FxVb-WjMoQQ7g-WVX","n_frames":23,"cost":0.0259225,"gemini_secs":33.25,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is a perfect hero shot of the final, plated dish. It's a clean, static, overhead shot that is very appetizing and fits all the rules.","file_id":"1ZlUUQDd2c0_zFH5Mg34FrzuaYvCPnBdl","drive_link":"https://drive.google.com/file/d/1ZlUUQDd2c0_zFH5Mg34FrzuaYvCPnBdl/view?usp=drivesdk","local":null},{"rank":2,"index":21,"timestamp":21.0,"reason":"This is an excellent close-up hero shot of a spoonful of the final product, showcasing the delicious texture and caramelized top. It's a strong alternative to the plated shot.","file_id":"1anicm11oHHlLKn1WK5U5NxtbOCuQnvrR","drive_link":"https://drive.google.com/file/d/1anicm11oHHlLKn1WK5U5NxtbOCuQnvrR/view?usp=drivesdk","local":null},{"rank":3,"index":9,"timestamp":9.0,"reason":"This is a clean, static shot of the roasted sweet potatoes. While a process shot, it's visually appealing and shows an important step of the recipe.","file_id":"14knaw8Fhds3HbRRYpwTSiFvDADi02-4_","drive_link":"https://drive.google.com/file/d/14knaw8Fhds3HbRRYpwTSiFvDADi02-4_/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1DnkKDiq_pgQpOWhGcXepGXo28YG-uv5e","extract_folder_id":"1DnkKDiq_pgQpOWhGcXepGXo28YG-uv5e","n_frames":23,"cost":0.0020823,"gemini_secs":25.9,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame perfectly captures the finished, plated dish with its glossy caramelized topping, serving as an ideal beauty shot without any hands or mid-action elements.","file_id":"1tI90s0_uOK7vaW87-cWzME3Qg5-l_OSO","drive_link":"https://drive.google.com/file/d/1tI90s0_uOK7vaW87-cWzME3Qg5-l_OSO/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This frame provides an excellent close-up hero shot of the finished sweet potato on a spoon, showcasing its texture and caramelized crust, which is a strong representation of the final food.","file_id":"1KyMOYnVW-rViU3LDDghal1zh5ehWJrkE","drive_link":"https://drive.google.com/file/d/1KyMOYnVW-rViU3LDDghal1zh5ehWJrkE/view?usp=drivesdk","local":null},{"rank":3,"index":9,"timestamp":9.0,"reason":"This frame shows the baked sweet potatoes on the tray, representing a distinct stage of the finished product before final plating and caramelization, and is a clean shot of the food.","file_id":"1ztXKAKOtBFInODuVX1wmqtKJIIf_UDn4","drive_link":"https://drive.google.com/file/d/1ztXKAKOtBFInODuVX1wmqtKJIIf_UDn4/view?usp=drivesdk","local":null}]}}},{"sfid":"1-heVFGxSWNTDmTU1qUnQIHM8QOjc0yJ9","year":"2026","title":"Butter Flights No Music","brand":"Kitchn","project_id":"2603K016","source_file_name":"Butter Flights_CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1jcdsFASfD6eh7_Xn856-mdi8LZ0PT3AZ","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1P0g5N8CDk6CTuZDSYNz72kPPejGwHyQK","extract_folder_id":"1P0g5N8CDk6CTuZDSYNz72kPPejGwHyQK","n_frames":10,"cost":0.013052500000000002,"gemini_secs":19.68,"candidates":[{"rank":1,"index":8,"timestamp":8.0,"reason":"This is a vibrant and visually appealing hero shot of a finished compound butter. The bright orange color is very eye-catching.","file_id":"1movc_kM8gntv97aXr8TEHqOPp4BT2Yoz","drive_link":"https://drive.google.com/file/d/1movc_kM8gntv97aXr8TEHqOPp4BT2Yoz/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This is another excellent hero shot. The bright green color is unique and intriguing, making for a strong thumbnail.","file_id":"15dqC_jMmCYSoXxCw8czX8L35KIhCG1zH","drive_link":"https://drive.google.com/file/d/15dqC_jMmCYSoXxCw8czX8L35KIhCG1zH/view?usp=drivesdk","local":null},{"rank":3,"index":4,"timestamp":4.0,"reason":"This frame clearly shows a finished, appetizing product. The strawberries and jam are easily identifiable and look delicious.","file_id":"1tfdJ_gWMdrgNOvV43MZIwhii4pPRF7lr","drive_link":"https://drive.google.com/file/d/1tfdJ_gWMdrgNOvV43MZIwhii4pPRF7lr/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1rdca1Q4bsLRQRUclBA4sFAu3p54MnoNm","extract_folder_id":"1rdca1Q4bsLRQRUclBA4sFAu3p54MnoNm","n_frames":10,"cost":0.0010233,"gemini_secs":14.76,"candidates":[{"rank":1,"index":2,"timestamp":2.0,"reason":"This frame is a clean, overhead hero shot of a vibrant green herb butter, perfectly showcasing a finished product without any distracting elements.","file_id":"1EbeVLXX0LuBNdhZoxBJVd31lT3Ww-S-k","drive_link":"https://drive.google.com/file/d/1EbeVLXX0LuBNdhZoxBJVd31lT3Ww-S-k/view?usp=drivesdk","local":null},{"rank":2,"index":4,"timestamp":4.0,"reason":"This frame presents an appealing strawberry butter with clear fruit pieces and jam, serving as an excellent hero shot of a distinct finished product.","file_id":"1eYYL-khPss3abSae6XWUk_262pCJUyZh","drive_link":"https://drive.google.com/file/d/1eYYL-khPss3abSae6XWUk_262pCJUyZh/view?usp=drivesdk","local":null},{"rank":3,"index":8,"timestamp":8.0,"reason":"This frame offers a vibrant orange chili butter in a metal bowl, providing visual variety in presentation and a clear hero shot of another unique butter flavor.","file_id":"1BryV8hbRfS8PTHp_3vXvONOudt4_IHfD","drive_link":"https://drive.google.com/file/d/1BryV8hbRfS8PTHp_3vXvONOudt4_IHfD/view?usp=drivesdk","local":null}]}}},{"sfid":"1-C17IydJQh_kdaSWRj1vstsuY5l82tAs","year":"2026","title":"CA Avocado Burger","brand":"Kitchn","project_id":"2603K008","source_file_name":"CA Avocado Burger FINAL.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1MOXLZCBcpMoxxPIJ_8M7x9veuaxy9upG","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/13aWgg-WH8vMHAp_4_Cl2lcZuAS5DwGGc","extract_folder_id":"13aWgg-WH8vMHAp_4_Cl2lcZuAS5DwGGc","n_frames":22,"cost":0.022796250000000004,"gemini_secs":33.57,"candidates":[]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Qw-44klmaee9bhjYeLF8K6slYPqxkX-l","extract_folder_id":"1Qw-44klmaee9bhjYeLF8K6slYPqxkX-l","n_frames":22,"cost":0.00191535,"gemini_secs":21.91,"candidates":[]}}},{"sfid":"1wKcnwZPTilUbRIK958qJ2kKQDylQnsSi","year":"2026","title":"CA Marinated Avocados","brand":"Kitchn","project_id":"2603K008","source_file_name":"CA Marinated Avocados CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1MOXLZCBcpMoxxPIJ_8M7x9veuaxy9upG","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1dRdi4O0tfWUhvDH25Y5r_-VmlbF4Vjrm","extract_folder_id":"1dRdi4O0tfWUhvDH25Y5r_-VmlbF4Vjrm","n_frames":21,"cost":0.02384125,"gemini_secs":35.68,"candidates":[{"rank":1,"index":19,"timestamp":19.0,"reason":"This is a perfect beauty shot of the final plated dish. The overhead angle is clean, the food looks delicious, and there are no hands or distracting action, which fits the rules perfectly.","file_id":"1pwx6ghbnXK75OYHp0lAy9pgQuwdj_0p0","drive_link":"https://drive.google.com/file/d/1pwx6ghbnXK75OYHp0lAy9pgQuwdj_0p0/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"This is another strong shot of the final dish. While it includes a spoon in action, which is generally avoided, it effectively shows the texture of the food and creates an appetizing moment. It provides a good alternative to the static hero shot.","file_id":"1N7WITDIYMZtW6Js5_PQVwFwJ1XL70o4C","drive_link":"https://drive.google.com/file/d/1N7WITDIYMZtW6Js5_PQVwFwJ1XL70o4C/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1h8nvzOsr8kP2zTOVh9amUJYFI7KCkFVr","extract_folder_id":"1h8nvzOsr8kP2zTOVh9amUJYFI7KCkFVr","n_frames":21,"cost":0.00195555,"gemini_secs":25.32,"candidates":[{"rank":1,"index":19,"timestamp":19.0,"reason":"This frame is a clean, overhead beauty shot of the fully plated dish, perfectly composed with no hands or distracting elements, aligning best with the preference for a hero shot of the final food.","file_id":"1QDscZFZOxGRRtNPOfKpfkxe-P7ofPl6u","drive_link":"https://drive.google.com/file/d/1QDscZFZOxGRRtNPOfKpfkxe-P7ofPl6u/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"This frame presents a clear overhead view of the plated dish, showcasing the finished recipe. While a spoon is present, it is not mid-action in a way that detracts from the overall beauty shot.","file_id":"1S1b3cFRoscyO0HZEbVtu1-r6PuTSwqSM","drive_link":"https://drive.google.com/file/d/1S1b3cFRoscyO0HZEbVtu1-r6PuTSwqSM/view?usp=drivesdk","local":null}]}}},{"sfid":"1gBIRARLb_VWxNl3n3BnzaL7Epw9IKpVK","year":"2026","title":"cabbagekatsu final mus caps","brand":"Kitchn","project_id":"2602K009","source_file_name":"cabbagekatsu-final_clean.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1yVxGeZ82WkGZrXk-FDHKT8jEQV0Jb5Pf","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1g93uSCMUQw6JsaOpzmZtpzNxXi2kyfvp","extract_folder_id":"1g93uSCMUQw6JsaOpzmZtpzNxXi2kyfvp","n_frames":41,"cost":0.04471625,"gemini_secs":55.39,"candidates":[{"rank":1,"index":36,"timestamp":36.0,"reason":"This is a perfect beauty shot of the final plated dish. The sandwich is stacked to clearly show the delicious cross-section, and the framing is clean and appealing.","file_id":"1CbOxRq3rqnf4LVwtc2hVoKLaLiRKg8td","drive_link":"https://drive.google.com/file/d/1CbOxRq3rqnf4LVwtc2hVoKLaLiRKg8td/view?usp=drivesdk","local":null},{"rank":2,"index":4,"timestamp":4.0,"reason":"This is a strong hero shot of the finished sandwich. The close-up, handheld angle clearly shows the texture and layers, making the food look very appetizing.","file_id":"1cSvMmHjb91zwhVpyhP5vNWZBIYfwMfQs","drive_link":"https://drive.google.com/file/d/1cSvMmHjb91zwhVpyhP5vNWZBIYfwMfQs/view?usp=drivesdk","local":null},{"rank":3,"index":27,"timestamp":27.0,"reason":"This is a clean overhead shot of the cooked cabbage katsu. It highlights the main component of the recipe beautifully and provides a different visual from the final sandwich shots.","file_id":"1vJiGRTF10WHdcrCdZhmmgw3f61ceBlj9","drive_link":"https://drive.google.com/file/d/1vJiGRTF10WHdcrCdZhmmgw3f61ceBlj9/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1gaAardmnTm_OA7QHbJ8XpOTB3u0ZUi-O","extract_folder_id":"1gaAardmnTm_OA7QHbJ8XpOTB3u0ZUi-O","n_frames":41,"cost":0.00357015,"gemini_secs":39.53,"candidates":[{"rank":1,"index":36,"timestamp":36.0,"reason":"This frame is a perfect beauty shot of the final, plated, and stacked sandwich, clearly showing the completed recipe in an appealing way.","file_id":"1F6eLYxdLOL3StiRbnU0OdqL_HC4u16tp","drive_link":"https://drive.google.com/file/d/1F6eLYxdLOL3StiRbnU0OdqL_HC4u16tp/view?usp=drivesdk","local":null},{"rank":2,"index":5,"timestamp":5.0,"reason":"This frame provides an excellent hero shot of the sandwich cut in half, highlighting its impressive layers and texture, distinct from the plated shot.","file_id":"1pVe-6KT1Lt_ZA-kLN-GIBHzu7Xum-39l","drive_link":"https://drive.google.com/file/d/1pVe-6KT1Lt_ZA-kLN-GIBHzu7Xum-39l/view?usp=drivesdk","local":null},{"rank":3,"index":27,"timestamp":27.0,"reason":"This frame showcases the golden-brown, crispy fried cabbage cutlets on a cooling rack, representing a key and visually appealing component of the recipe before final assembly.","file_id":"1VMMdCyLTMQggXffNBQYLl7HHHN8cY57L","drive_link":"https://drive.google.com/file/d/1VMMdCyLTMQggXffNBQYLl7HHHN8cY57L/view?usp=drivesdk","local":null}]}}},{"sfid":"1z7_dTC_LKOiWfzErK2PJl5s4iKGENUKV","year":"2026","title":"CajunPotatoSoup Final Mus Cap 1","brand":"Kitchn","project_id":"2601K005","source_file_name":"CajunPotatoSoup_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1TyxeS-x7fJZkrAFwqSFAUdsVA95Js7Ch","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1b2NweBo0HPBRa50YnUF7LMiFQY0BvCOP","extract_folder_id":"1b2NweBo0HPBRa50YnUF7LMiFQY0BvCOP","n_frames":29,"cost":0.03177375,"gemini_secs":46.97,"candidates":[{"rank":1,"index":4,"timestamp":4.0,"reason":"This is an excellent hero shot of the finished dish. The spoonful is perfectly composed, sharp, and clearly shows the texture and ingredients of the soup, making it look very appetizing.","file_id":"1p31YvMbNnd70XpUz-XaUeFxxIpBh8R0Q","drive_link":"https://drive.google.com/file/d/1p31YvMbNnd70XpUz-XaUeFxxIpBh8R0Q/view?usp=drivesdk","local":null},{"rank":2,"index":27,"timestamp":27.0,"reason":"This is another strong hero shot of a spoonful of the finished soup. It's sharp, well-lit, and provides a great view of the plated dish, perfectly fitting the 'beauty moment' rule.","file_id":"1DEhy9Nwtu_u6fbmgB9WeC0IPIbjjO4OH","drive_link":"https://drive.google.com/file/d/1DEhy9Nwtu_u6fbmgB9WeC0IPIbjjO4OH/view?usp=drivesdk","local":null},{"rank":3,"index":0,"timestamp":0.0,"reason":"This is a dynamic and satisfying shot of the soup being poured. While it's an action shot, it focuses on the final plating and looks very appealing, offering a different style of beauty moment.","file_id":"1_-dsErE7jfxKlpxsyKopWzVzO82GzqpK","drive_link":"https://drive.google.com/file/d/1_-dsErE7jfxKlpxsyKopWzVzO82GzqpK/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1DtLrc4dbe1obyM4836lXVaKComL8zuu6","extract_folder_id":"1DtLrc4dbe1obyM4836lXVaKComL8zuu6","n_frames":29,"cost":0.00261045,"gemini_secs":35.69,"candidates":[{"rank":1,"index":4,"timestamp":4.0,"reason":"This frame provides a clear hero shot of the finished soup, showcasing the ingredients and creamy texture on a spoon, which is a strong beauty moment for food.","file_id":"1MdJCu44RLXBBQV6NbYmf_VJsGgeyEqeS","drive_link":"https://drive.google.com/file/d/1MdJCu44RLXBBQV6NbYmf_VJsGgeyEqeS/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"This frame captures the soup being served into a bowl, presenting a dynamic and appealing view of the final dish as it's prepared for eating.","file_id":"1FLtxJViu-pBBxT95wjJ4iBIHzIV4nyn-","drive_link":"https://drive.google.com/file/d/1FLtxJViu-pBBxT95wjJ4iBIHzIV4nyn-/view?usp=drivesdk","local":null},{"rank":3,"index":1,"timestamp":1.0,"reason":"This frame shows the final garnish being added to the soup, representing the completed recipe and adding visual appeal with fresh green onions.","file_id":"1_qNMuSL3m63VU6c6Jtf8Vx3AGDxvN-vn","drive_link":"https://drive.google.com/file/d/1_qNMuSL3m63VU6c6Jtf8Vx3AGDxvN-vn/view?usp=drivesdk","local":null}]}}},{"sfid":"1vz8LSVwtQcWsFAw_Ebgx8a7OWDduVNkA","year":"2026","title":"California Avocados 2026 - CA Avocado Burger","brand":"Kitchn","project_id":"2603K008","source_file_name":"CA Avocado Burger FINAL.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1MOXLZCBcpMoxxPIJ_8M7x9veuaxy9upG","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/18VVGQhG2LP2xcUUQaEtk7PMeJLUozvva","extract_folder_id":"18VVGQhG2LP2xcUUQaEtk7PMeJLUozvva","n_frames":22,"cost":0.02527875,"gemini_secs":44.53,"candidates":[{"rank":1,"index":21,"timestamp":21.0,"reason":"This is the best hero shot of the final dish. The cross-section is appealing and clearly shows all the ingredients. It's a perfect 'beauty moment'.","file_id":"1K-VuNhd9ERawz48atkUUeXAt8HsDTDJZ","drive_link":"https://drive.google.com/file/d/1K-VuNhd9ERawz48atkUUeXAt8HsDTDJZ/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This is a strong hero shot of the finished dish before being cut, providing a different and equally appealing view of the final product.","file_id":"1BMqYPj_98Su0iXWrAKZ68OmrWKbYwn9P","drive_link":"https://drive.google.com/file/d/1BMqYPj_98Su0iXWrAKZ68OmrWKbYwn9P/view?usp=drivesdk","local":null},{"rank":3,"index":6,"timestamp":6.0,"reason":"While not the final dish, this is a clean, well-composed shot of a key component (the crispy rice bun) that looks delicious on its own.","file_id":"1JUZdWabbhLAEcy85pJPFRLqvfqQEpRBx","drive_link":"https://drive.google.com/file/d/1JUZdWabbhLAEcy85pJPFRLqvfqQEpRBx/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1I3xH9peKF3CP60czewHC59TuTzDR4D1D","extract_folder_id":"1I3xH9peKF3CP60czewHC59TuTzDR4D1D","n_frames":22,"cost":0.00193665,"gemini_secs":20.6,"candidates":[]}}},{"sfid":"1astRFsHfhQBoDOZV3g_XFe0AjfaXkwZj","year":"2026","title":"Carlota De Queso y Limon","brand":"Kitchn","project_id":"2603K010","source_file_name":"Carlota De Queso y Limon CLEAN v2.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1iXZ30--EwRXjAOUuTX24bQmvs-ryRchE","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1ZYgUVC_v4Tt6vEE3Ap_a7yfyk3d8OCJA","extract_folder_id":"1ZYgUVC_v4Tt6vEE3Ap_a7yfyk3d8OCJA","n_frames":23,"cost":0.02643125,"gemini_secs":41.1,"candidates":[{"rank":1,"index":4,"timestamp":4.0,"reason":"This is a perfect hero shot of the plated, finished dish. It's sharp, well-composed, and the wider framing gives context without losing focus on the dessert.","file_id":"1qJc9VaPSIyrVwEwdA9AWrrDitcieHCK8","drive_link":"https://drive.google.com/file/d/1qJc9VaPSIyrVwEwdA9AWrrDitcieHCK8/view?usp=drivesdk","local":null},{"rank":2,"index":5,"timestamp":5.0,"reason":"A good presenter shot that clearly shows the finished dish. The human element can be engaging, and the composition is clean and appealing.","file_id":"1X9BFHTXhWPjP3T-h0d8frLDtKen59DlC","drive_link":"https://drive.google.com/file/d/1X9BFHTXhWPjP3T-h0d8frLDtKen59DlC/view?usp=drivesdk","local":null},{"rank":3,"index":0,"timestamp":0.0,"reason":"While an action shot, this frame is clean, sharp, and aesthetically pleasing. It clearly communicates the recipe's core components (cookies and cream) in an engaging way.","file_id":"1DK-I6O_DEGLgIOLyJRtTcKiLVy1IFGu4","drive_link":"https://drive.google.com/file/d/1DK-I6O_DEGLgIOLyJRtTcKiLVy1IFGu4/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1ha4lYJNRwtWKSqE4JGKC7Z2cPVG22wXw","extract_folder_id":"1ha4lYJNRwtWKSqE4JGKC7Z2cPVG22wXw","n_frames":23,"cost":0.00216795,"gemini_secs":62.18,"candidates":[{"rank":1,"index":4,"timestamp":4.0,"reason":"This frame is a sharp, graphics-free hero shot of the plated finished dessert, clearly showing its layers and toppings, which aligns with the preference for a beauty moment of the final food.","file_id":"1FX_R64U9oJZyEbVUNH4s5gRjJMZk9bZ9","drive_link":"https://drive.google.com/file/d/1FX_R64U9oJZyEbVUNH4s5gRjJMZk9bZ9/view?usp=drivesdk","local":null}]}}},{"sfid":"13l3YZmOyauv3P4pACSdDu9tpg0G1Pyiz","year":"2026","title":"Chickeninbag Final mus caps","brand":"Kitchn","project_id":"2602K026","source_file_name":"Chickeninbag_Final_Clean.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1pRdZCEeDBfAlroc8uhv8LUIajVFbKa_n","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1NclcTopvukZOFbVUTmquZ37dQShXx-hx","extract_folder_id":"1NclcTopvukZOFbVUTmquZ37dQShXx-hx","n_frames":28,"cost":0.0308625,"gemini_secs":50.44,"candidates":[{"rank":1,"index":21,"timestamp":21.0,"reason":"This is a perfect beauty shot of the finished, plated dish. It's well-lit, sharp, and free of hands, action, and graphics, perfectly matching the content rules.","file_id":"1Q2r-7B5M19dmqJFKGK3IXq_glyPToDDy","drive_link":"https://drive.google.com/file/d/1Q2r-7B5M19dmqJFKGK3IXq_glyPToDDy/view?usp=drivesdk","local":null},{"rank":2,"index":27,"timestamp":27.0,"reason":"This is an excellent, appetizing close-up of a forkful of the salad. While it's an action shot, it serves as a strong hero moment of the food itself.","file_id":"1GhC3_mRyY14ZPaNPvNisCNFFSi0EeJ5z","drive_link":"https://drive.google.com/file/d/1GhC3_mRyY14ZPaNPvNisCNFFSi0EeJ5z/view?usp=drivesdk","local":null},{"rank":3,"index":25,"timestamp":25.0,"reason":"This frame captures the final moment of preparation, showing the fully garnished dish. It's a dynamic and appealing shot of the completed recipe.","file_id":"1iLTtFBJ-0kcJXtjODY9Pbxz0Po8UkQ7i","drive_link":"https://drive.google.com/file/d/1iLTtFBJ-0kcJXtjODY9Pbxz0Po8UkQ7i/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/175Y6WhJcO8AEvLwguz7mzAnsUALxYJGZ","extract_folder_id":"175Y6WhJcO8AEvLwguz7mzAnsUALxYJGZ","n_frames":28,"cost":0.0024741,"gemini_secs":30.43,"candidates":[{"rank":1,"index":25,"timestamp":25.0,"reason":"This frame is a perfect beauty moment, showcasing the fully plated and garnished finished dish from a clean, wide angle without any hands or text overlays.","file_id":"194GjbTpiwFMVAEWdI-XzbzccI6JFTPFU","drive_link":"https://drive.google.com/file/d/194GjbTpiwFMVAEWdI-XzbzccI6JFTPFU/view?usp=drivesdk","local":null},{"rank":2,"index":21,"timestamp":21.0,"reason":"This frame is a strong hero shot of the plated chicken salad before final garnishes, offering a clean and appealing view of the completed recipe without hands or text overlays.","file_id":"1oZoh3YZPbKgUn6zO4Odm4kCmblj15wCJ","drive_link":"https://drive.google.com/file/d/1oZoh3YZPbKgUn6zO4Odm4kCmblj15wCJ/view?usp=drivesdk","local":null}]}}},{"sfid":"16kNdlZ46_32s4R71nCqVvFM5LzkkAHe4","year":"2026","title":"ChocolateMugCake Final Mus Cap","brand":"Kitchn","project_id":"2601K023","source_file_name":"ChocolateMugCake_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1UBid33Z-EkCYmNU41hLoTFN6DLwFFSGa","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1venDeXI5pL6PU5IktGjUkqs9wT-PRjbB","extract_folder_id":"1venDeXI5pL6PU5IktGjUkqs9wT-PRjbB","n_frames":28,"cost":0.030623750000000005,"gemini_secs":50.93,"candidates":[{"rank":1,"index":23,"timestamp":23.0,"reason":"This is a perfect hero shot of the final, plated dish. It's well-lit, sharp, and shows the delicious-looking finished recipe with ice cream and toppings.","file_id":"1ADpPWBtsORDxtsy2_zWwp1XHQKJ3iiN_","drive_link":"https://drive.google.com/file/d/1ADpPWBtsORDxtsy2_zWwp1XHQKJ3iiN_/view?usp=drivesdk","local":null},{"rank":2,"index":20,"timestamp":20.0,"reason":"This is a clean, appealing overhead shot of the cooked mug cake before toppings are added. It's a strong alternative hero shot that clearly shows the recipe's result.","file_id":"1NZY55I1HjuvJ7vbbea2geYrpxKXD8_rj","drive_link":"https://drive.google.com/file/d/1NZY55I1HjuvJ7vbbea2geYrpxKXD8_rj/view?usp=drivesdk","local":null},{"rank":3,"index":27,"timestamp":27.0,"reason":"This is an excellent close-up 'hero bite' shot that showcases the gooey texture of the cake and melted ice cream, creating strong appetite appeal.","file_id":"1Bz45mFKuIJMuumwZVwdQZp_R68vP5YpA","drive_link":"https://drive.google.com/file/d/1Bz45mFKuIJMuumwZVwdQZp_R68vP5YpA/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/18YO7Ohf2RKJk1bzBFKSEJ21f_12LmOle","extract_folder_id":"18YO7Ohf2RKJk1bzBFKSEJ21f_12LmOle","n_frames":28,"cost":0.00257985,"gemini_secs":31.1,"candidates":[{"rank":1,"index":24,"timestamp":24.0,"reason":"This frame is a perfect beauty shot of the completed recipe, showing the chocolate mug cake with melting ice cream and chocolate chips, ready to be eaten. It's a clean overhead view and free of any distractions.","file_id":"1TKBXw0qo8q3LEopUY694LsD5bTlpkbWJ","drive_link":"https://drive.google.com/file/d/1TKBXw0qo8q3LEopUY694LsD5bTlpkbWJ/view?usp=drivesdk","local":null},{"rank":2,"index":4,"timestamp":4.0,"reason":"This frame is a strong beauty shot of the cooked chocolate mug cake with melted chocolate chips, showcasing its texture and appeal before the addition of ice cream. It's a clean overhead view with a spoon, indicating it's ready to enjoy.","file_id":"1rRmX_vtOTkm4-KY6VALUCHcB3yM0RzVc","drive_link":"https://drive.google.com/file/d/1rRmX_vtOTkm4-KY6VALUCHcB3yM0RzVc/view?usp=drivesdk","local":null},{"rank":3,"index":20,"timestamp":20.0,"reason":"This frame provides a clean hero shot of the freshly baked chocolate mug cake, without any toppings or a spoon, offering a clear view of the base recipe's final appearance.","file_id":"16UvazWny4XmZBEHnKisiL3V-ElXlYiCh","drive_link":"https://drive.google.com/file/d/16UvazWny4XmZBEHnKisiL3V-ElXlYiCh/view?usp=drivesdk","local":null}]}}},{"sfid":"1JlDsVAImksHjqRx7X8eBm4sVzouNa8xR","year":"2026","title":"Cinnamon Cottage Cheese Toast v2","brand":"Kitchn","project_id":"2601K012","source_file_name":"Cinnamon Cottage Cheese Toast CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/14WJ8DPZ9HM-bcG6FWT4uVKIdZD9PEsp6","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1pmd_g8QNYIZdKheX3N69lD3SgzPjdxeC","extract_folder_id":"1pmd_g8QNYIZdKheX3N69lD3SgzPjdxeC","n_frames":35,"cost":0.037983750000000004,"gemini_secs":48.79,"candidates":[{"rank":1,"index":31,"timestamp":31.0,"reason":"This is an excellent beauty shot of the final, plated dish. It's well-lit, appetizing, and garnished with raspberries for color, making it the ideal hero shot for a recipe video.","file_id":"1vKojDjga5vsr-uvN7hWi4Nz3f-08KMmC","drive_link":"https://drive.google.com/file/d/1vKojDjga5vsr-uvN7hWi4Nz3f-08KMmC/view?usp=drivesdk","local":null},{"rank":2,"index":30,"timestamp":30.0,"reason":"This is a clear, static shot of the cooked toast in the air fryer. It effectively shows the finished product and the cooking method, making it a strong and informative choice.","file_id":"1SuasCr_XVhoayfPRbNlHHJxDyYdLvOew","drive_link":"https://drive.google.com/file/d/1SuasCr_XVhoayfPRbNlHHJxDyYdLvOew/view?usp=drivesdk","local":null},{"rank":3,"index":2,"timestamp":2.0,"reason":"This is a clean, static overhead shot of the toast before it's cooked. It's visually appealing and clearly shows the preparation, serving as a good 'before' shot.","file_id":"1nZD5EtF5AzPNCpc-lJYapWukts9ctiv3","drive_link":"https://drive.google.com/file/d/1nZD5EtF5AzPNCpc-lJYapWukts9ctiv3/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Zm10PiNE10dStrJrG10nNEqR7sIS_u87","extract_folder_id":"1Zm10PiNE10dStrJrG10nNEqR7sIS_u87","n_frames":35,"cost":0.00310485,"gemini_secs":34.15,"candidates":[{"rank":1,"index":31,"timestamp":31.0,"reason":"This frame presents the plated finished dish, cut into triangles and served with fresh raspberries, which is a strong beauty moment of the final food. It is sharp and graphics-free.","file_id":"1-JRuxMzGQB8ynrW-UmfT90m6wi7894Gi","drive_link":"https://drive.google.com/file/d/1-JRuxMzGQB8ynrW-UmfT90m6wi7894Gi/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This frame shows the prepared toast with the creamy cottage cheese mixture and cinnamon sugar before cooking. It's a clean, sharp, and graphics-free hero shot of the food in an appealing state.","file_id":"1c98UzwRDbBpaEotBmk0mYKkAqC9SZhAG","drive_link":"https://drive.google.com/file/d/1c98UzwRDbBpaEotBmk0mYKkAqC9SZhAG/view?usp=drivesdk","local":null},{"rank":3,"index":30,"timestamp":30.0,"reason":"This frame displays the two pieces of cooked toast inside the air fryer basket. While not plated, it clearly shows the final cooked product, is sharp, and graphics-free.","file_id":"1GweL5hhNFSaptEJwKMDXtlfCQ3xIaoaC","drive_link":"https://drive.google.com/file/d/1GweL5hhNFSaptEJwKMDXtlfCQ3xIaoaC/view?usp=drivesdk","local":null}]}}},{"sfid":"1ZMtOL6OsNd-EkHvcDf7jWkUS8B4HNgbc","year":"2026","title":"CopenhagenRoastBeefandFries Final Mus Cap","brand":"Kitchn","project_id":"2602K010","source_file_name":"CopenhagenRoastBeefandFries_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1fknwH_rePlbQ9zd8zGHu1Nm-7-uxWlLx","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1NxJmmMF0HzwEEy_UHph93yWTVa88S0az","extract_folder_id":"1NxJmmMF0HzwEEy_UHph93yWTVa88S0az","n_frames":36,"cost":0.0389075,"gemini_secs":44.53,"candidates":[{"rank":1,"index":27,"timestamp":27.0,"reason":"This is a perfect beauty shot of the final, plated dish. The clean overhead angle clearly shows all components of the recipe and is very appetizing.","file_id":"1Z13FHbe81dduM6maN4qI-46L3jvIaF67","drive_link":"https://drive.google.com/file/d/1Z13FHbe81dduM6maN4qI-46L3jvIaF67/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This is a great hero shot of the main concept\u2014the roast beef wrapped around fries. It's a clear, appealing image that shows the viewer exactly what they will be making.","file_id":"1k_U3d3vjMq8CmMie4o4sQFJCULbS5Ub-","drive_link":"https://drive.google.com/file/d/1k_U3d3vjMq8CmMie4o4sQFJCULbS5Ub-/view?usp=drivesdk","local":null},{"rank":3,"index":23,"timestamp":23.0,"reason":"A clean and simple shot focusing on the main ingredient, the roast beef, beautifully arranged on a platter. It's an attractive and high-quality image.","file_id":"1robYSTXgoKKwvtZ8-7l2oDnWWAO3BBX2","drive_link":"https://drive.google.com/file/d/1robYSTXgoKKwvtZ8-7l2oDnWWAO3BBX2/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1hER4CJl1gP0sDsuXGHyjAKRNfuRYMvas","extract_folder_id":"1hER4CJl1gP0sDsuXGHyjAKRNfuRYMvas","n_frames":36,"cost":0.0031431000000000002,"gemini_secs":35.13,"candidates":[{"rank":1,"index":27,"timestamp":27.0,"reason":"This frame provides the best beauty moment, showcasing the complete recipe components (roast beef, fries, and sauce) in a clean, overhead plated shot.","file_id":"1NEuRGSp8_JKW06n3Wu4FONpuFCGQFHov","drive_link":"https://drive.google.com/file/d/1NEuRGSp8_JKW06n3Wu4FONpuFCGQFHov/view?usp=drivesdk","local":null},{"rank":2,"index":23,"timestamp":23.0,"reason":"This frame offers a clean overhead shot of the main dish (sliced roast beef) before final assembly, representing a 'plated finished dish' moment.","file_id":"13yOMGZaa7-vTU16BhYnv_s34f5wpqBrK","drive_link":"https://drive.google.com/file/d/13yOMGZaa7-vTU16BhYnv_s34f5wpqBrK/view?usp=drivesdk","local":null},{"rank":3,"index":2,"timestamp":2.0,"reason":"This frame is a clear hero shot of the final assembled food item (the roast beef and fries roll), even though it includes a hand, it's presenting the finished product rather than showing mid-action preparation.","file_id":"11ojo62BjZwT84dYPP7IU8RL-625kHrrH","drive_link":"https://drive.google.com/file/d/11ojo62BjZwT84dYPP7IU8RL-625kHrrH/view?usp=drivesdk","local":null}]}}},{"sfid":"1rZZ1ru-4m7BVKdR25fx4Ec88dWJh2nPy","year":"2026","title":"CustardOatmeal Final Mus Cap","brand":"Kitchn","project_id":"2601K006","source_file_name":"CustardOatmeal_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1xBRfo7rnwo6RVrPfp1QfLYsmhC4bQpjS","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1q4Ds5bGAd9HrTWfitEpeRTuB13xZg_oN","extract_folder_id":"1q4Ds5bGAd9HrTWfitEpeRTuB13xZg_oN","n_frames":25,"cost":0.02673875,"gemini_secs":57.03,"candidates":[{"rank":1,"index":20,"timestamp":20.0,"reason":"This is a perfect hero shot of the finished dish. It's bright, sharp, and appetizing, perfectly aligning with the preference for a 'beauty moment'.","file_id":"1DgkgMVjnqnJ9zhroB7f0nvtOMSszbrnt","drive_link":"https://drive.google.com/file/d/1DgkgMVjnqnJ9zhroB7f0nvtOMSszbrnt/view?usp=drivesdk","local":null},{"rank":2,"index":24,"timestamp":24.0,"reason":"This 'bite shot' is dynamic and effectively showcases the creamy texture of the oatmeal. It's a highly engaging alternative to a static beauty shot.","file_id":"1yIa7fRxPZ3_dO9jF-eIWkcRU7detH6Cx","drive_link":"https://drive.google.com/file/d/1yIa7fRxPZ3_dO9jF-eIWkcRU7detH6Cx/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Ev3YeAUR86qWMnKvlobcY7YbEfPiABMp","extract_folder_id":"1Ev3YeAUR86qWMnKvlobcY7YbEfPiABMp","n_frames":25,"cost":0.00230625,"gemini_secs":25.21,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame is a perfect hero shot of the fully plated and garnished dish, showcasing all the ingredients beautifully. It is sharp, graphics-free, and captures a 'beauty moment' of the final food.","file_id":"1mwS2A1gvkYyOSBEh9BBaEXpbAHVjpvJa","drive_link":"https://drive.google.com/file/d/1mwS2A1gvkYyOSBEh9BBaEXpbAHVjpvJa/view?usp=drivesdk","local":null},{"rank":2,"index":18,"timestamp":18.0,"reason":"This frame presents a clean, static beauty shot of the oatmeal almost fully assembled with blueberries, compote, creamy drizzle, and chopped almonds. It avoids mid-action and ingredient prep, fitting the 'beauty moment' preference, and is from a distinct shot_id.","file_id":"1y52_27u3SfD7JNXwmFcpnqME4j7TtCPM","drive_link":"https://drive.google.com/file/d/1y52_27u3SfD7JNXwmFcpnqME4j7TtCPM/view?usp=drivesdk","local":null},{"rank":3,"index":13,"timestamp":13.0,"reason":"This frame is a static, clean shot of the oatmeal with blueberry compote and fresh blueberries, representing an earlier stage of assembly. It's a good 'beauty moment' of the food, sharp, graphics-free, and from a different shot_id than the other candidates.","file_id":"1wCN1gKSD0Au7UfxA53hYtxfBRygmsvbw","drive_link":"https://drive.google.com/file/d/1wCN1gKSD0Au7UfxA53hYtxfBRygmsvbw/view?usp=drivesdk","local":null}]}}},{"sfid":"1HgHl_4vrwHbJzt2gbPlqX7NTSyzHEnVs","year":"2026","title":"dumplinglasagna Final mus caps","brand":"Kitchn","project_id":"2601K016","source_file_name":"dumplinglasagna_Final_Clean.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1SVbhzBHGlkTjp8tpNmC4K8cwJYLw6Rjd","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1DNg1h6f54khYWCATSeb_YRaAQKEEABpX","extract_folder_id":"1DNg1h6f54khYWCATSeb_YRaAQKEEABpX","n_frames":33,"cost":0.03572625,"gemini_secs":42.55,"candidates":[{"rank":1,"index":28,"timestamp":28.0,"reason":"This is a perfect beauty shot of the final, plated, and garnished dish. It's sharp, well-lit, and highly appetizing, fitting the rules perfectly.","file_id":"1H-t4ScADVR-ecz0PpWhAhlnOug-sv4Zp","drive_link":"https://drive.google.com/file/d/1H-t4ScADVR-ecz0PpWhAhlnOug-sv4Zp/view?usp=drivesdk","local":null},{"rank":2,"index":3,"timestamp":3.0,"reason":"This is a compelling close-up of the food on a fork, showing the interior texture and filling. While it's an action shot, the food is the clear hero, making it a strong choice.","file_id":"1Z_hF80MDo_svUz5vFpfnrfD07iLWa81-","drive_link":"https://drive.google.com/file/d/1Z_hF80MDo_svUz5vFpfnrfD07iLWa81-/view?usp=drivesdk","local":null},{"rank":3,"index":24,"timestamp":24.0,"reason":"This frame shows multiple servings of the cooked dish before garnishing. It's a clean, sharp hero shot that showcases the result of the recipe on a larger scale.","file_id":"1FyWlnFrutfPL0awOrD_96AwBsvDKLF0b","drive_link":"https://drive.google.com/file/d/1FyWlnFrutfPL0awOrD_96AwBsvDKLF0b/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1dItY77kDkn-NPVzqrgD2RzPZDFOQwywR","extract_folder_id":"1dItY77kDkn-NPVzqrgD2RzPZDFOQwywR","n_frames":33,"cost":0.00287355,"gemini_secs":33.46,"candidates":[{"rank":1,"index":1,"timestamp":1.0,"reason":"This frame presents a clean, overhead beauty shot of the fully garnished, finished dish, perfectly aligning with the preference for a plated finished dish and avoiding hands mid-action.","file_id":"1g_UthWAFWZh4rMnn8Hiz-fXUDcKgdUWQ","drive_link":"https://drive.google.com/file/d/1g_UthWAFWZh4rMnn8Hiz-fXUDcKgdUWQ/view?usp=drivesdk","local":null},{"rank":2,"index":28,"timestamp":28.0,"reason":"This frame offers another excellent beauty shot of the finished and garnished dumpling lasagna in a ramekin, captured from a slightly angled perspective, without any hands in action.","file_id":"1sqLwRgKg0xI9oKzMrjjSgd78Kfx5UV5g","drive_link":"https://drive.google.com/file/d/1sqLwRgKg0xI9oKzMrjjSgd78Kfx5UV5g/view?usp=drivesdk","local":null},{"rank":3,"index":23,"timestamp":23.0,"reason":"This frame shows a close-up of the cooked dumpling lasagna in a ramekin, before the final garnishes, serving as a good beauty moment of the prepared food without hands.","file_id":"1bwBgTF-6BiKlBgifkkMOdQT5NNYoQhfx","drive_link":"https://drive.google.com/file/d/1bwBgTF-6BiKlBgifkkMOdQT5NNYoQhfx/view?usp=drivesdk","local":null}]}}},{"sfid":"1x2yXUZJ4XltBhn-OZ88R-Xot6xLjUoQL","year":"2026","title":"EXPO WEST w captions","brand":"Kitchn","project_id":"2603K009","source_file_name":"EXPO WEST w_ captions.MOV","parent_folder_link":"https://drive.google.com/drive/folders/1I8j-SJtJkDINoW7VkO9W-uOzCYChcI2N","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1tlnrJeLEmueTxpIvFL-mBwD1ySQ1HOwc","extract_folder_id":"1tlnrJeLEmueTxpIvFL-mBwD1ySQ1HOwc","n_frames":31,"cost":0.0339075,"gemini_secs":42.01,"candidates":[{"rank":1,"index":30,"timestamp":30.0,"reason":"This is the only frame in the entire video that is free of text overlays. It is a clean, sharp, and well-lit product shot that fits the 'hero shot of the final food' rule.","file_id":"1Fl0x-w5cHkgVEWFy4kN3I8InyFLA3nN5","drive_link":"https://drive.google.com/file/d/1Fl0x-w5cHkgVEWFy4kN3I8InyFLA3nN5/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Dlr-Qnk-gTqIrHg_jjsuB86FNqGS0wD7","extract_folder_id":"1Dlr-Qnk-gTqIrHg_jjsuB86FNqGS0wD7","n_frames":31,"cost":0.0027933,"gemini_secs":39.8,"candidates":[{"rank":1,"index":30,"timestamp":30.0,"reason":"This is the only frame that is sharp and completely graphics-free, showing only product labels as part of the scene, not as an overlay. It features food ingredients (sauces) which are relevant to recipes, making it the best available option despite not being a 'beauty moment' of a finished dish.","file_id":"1kzYnmetdQLuQ50DX6bfqJdb4Hs8Tkh9s","drive_link":"https://drive.google.com/file/d/1kzYnmetdQLuQ50DX6bfqJdb4Hs8Tkh9s/view?usp=drivesdk","local":null}]}}},{"sfid":"1CCqvopPzpJBgTnWEl_w2KSY_36veDSLu","year":"2026","title":"frenchonionbeans Final cap mus","brand":"Kitchn","project_id":"2601K003","source_file_name":"frenchonionbeans_Final_Clean.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1HbCxFNDBC2WKjUvmsBrDlOO0wReBeTyx","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1x72l_tv3G7cBwf0RjcFYNGMwmXTWdxxc","extract_folder_id":"1x72l_tv3G7cBwf0RjcFYNGMwmXTWdxxc","n_frames":30,"cost":0.03322,"gemini_secs":46.38,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is a perfect hero shot of the final dish. It's a clean, static, and appetizing beauty moment that fully adheres to the content rules.","file_id":"1wtVzqD96KXk2dq2eJtA0Y-Vd1JF1KG96","drive_link":"https://drive.google.com/file/d/1wtVzqD96KXk2dq2eJtA0Y-Vd1JF1KG96/view?usp=drivesdk","local":null},{"rank":2,"index":26,"timestamp":26.0,"reason":"This is another excellent hero shot of the final dish. The background action of pouring wine adds a nice lifestyle element while the main subject remains the focus.","file_id":"1Lzkjfw7ZQMnrBKTSkkIp_FbsUMndb9Cd","drive_link":"https://drive.google.com/file/d/1Lzkjfw7ZQMnrBKTSkkIp_FbsUMndb9Cd/view?usp=drivesdk","local":null},{"rank":3,"index":4,"timestamp":4.0,"reason":"This is a compelling hero shot of a spoonful of the dish, showcasing the delicious texture and cheese pull. While it includes a hand, the focus is entirely on the food, making it a strong option.","file_id":"1noyVxMFaOPPM2w3EK3WvKyAnoB-6kojf","drive_link":"https://drive.google.com/file/d/1noyVxMFaOPPM2w3EK3WvKyAnoB-6kojf/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Ym1e-LUfVCTJNwriqMBhvSbLEoLV68i7","extract_folder_id":"1Ym1e-LUfVCTJNwriqMBhvSbLEoLV68i7","n_frames":30,"cost":0.0027402,"gemini_secs":30.88,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame is a clean, wide beauty shot of the finished dish in the cast iron skillet, perfectly representing the final food without any distracting action.","file_id":"1ORc2hRrp1b5sI0CrSvF02AUL5D9T1Tmw","drive_link":"https://drive.google.com/file/d/1ORc2hRrp1b5sI0CrSvF02AUL5D9T1Tmw/view?usp=drivesdk","local":null},{"rank":2,"index":26,"timestamp":26.0,"reason":"This frame offers another excellent beauty shot of the finished dish, set in a wider context with wine being poured, enhancing the 'final cap mus' and overall presentation.","file_id":"1DbZ9Q-k_9cYLrZ0-0Aihyf14qikEsBLp","drive_link":"https://drive.google.com/file/d/1DbZ9Q-k_9cYLrZ0-0Aihyf14qikEsBLp/view?usp=drivesdk","local":null},{"rank":3,"index":3,"timestamp":3.0,"reason":"This frame is a dynamic hero shot that effectively showcases the melted cheese pull and the layers of the dish, highlighting its appeal despite the presence of a spoon.","file_id":"1PKjJujppj5BIMwV0PWu4voXg5AIHoGK9","drive_link":"https://drive.google.com/file/d/1PKjJujppj5BIMwV0PWu4voXg5AIHoGK9/view?usp=drivesdk","local":null}]}}},{"sfid":"11TXZQRJnjlCyuc2oXmRCRr1myanHWJdl","year":"2026","title":"FriedRicePaperSnack Final Mus Cap","brand":"Kitchn","project_id":"2603K004","source_file_name":"FriedRicePaperSnack_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1b7Z3LeGn2Y79eER-9IqhpQ16H6pcLJsu","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1BDTn_yviYvLCbbyfrjenUh1SY3iMctn9","extract_folder_id":"1BDTn_yviYvLCbbyfrjenUh1SY3iMctn9","n_frames":30,"cost":0.0327825,"gemini_secs":41.02,"candidates":[{"rank":1,"index":24,"timestamp":24.0,"reason":"This is an excellent beauty shot of the plated, finished dish. The framing is clean, the food looks appealing, and there are no hands or distracting action.","file_id":"1qq_jX0UN_XzPI5cdbR2ZkrZpkZFU0ZmF","drive_link":"https://drive.google.com/file/d/1qq_jX0UN_XzPI5cdbR2ZkrZpkZFU0ZmF/view?usp=drivesdk","local":null},{"rank":2,"index":21,"timestamp":21.0,"reason":"This is a strong shot of the completed recipe, showing a batch of the snacks on a cooling rack. It effectively communicates the final product without any plating.","file_id":"1jEVBCESUy1ohzlcjp5oic-XLycW9p0gL","drive_link":"https://drive.google.com/file/d/1jEVBCESUy1ohzlcjp5oic-XLycW9p0gL/view?usp=drivesdk","local":null},{"rank":3,"index":1,"timestamp":1.0,"reason":"This is a compelling hero close-up of the food. It highlights the crispy, puffy texture and the colorful filling, making it look very appetizing.","file_id":"1boF7aNIU3M2dpvu0h4tVtkn4TNfspnl4","drive_link":"https://drive.google.com/file/d/1boF7aNIU3M2dpvu0h4tVtkn4TNfspnl4/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1_ZMLK7eri2pv0MGfMcJlkNgj6ZFG88FP","extract_folder_id":"1_ZMLK7eri2pv0MGfMcJlkNgj6ZFG88FP","n_frames":30,"cost":0.0026883000000000002,"gemini_secs":29.02,"candidates":[{"rank":1,"index":24,"timestamp":24.0,"reason":"This frame provides a clean, overhead beauty shot of the finished, plated dish, perfectly aligning with the preference for a 'beauty moment' and 'plated finished dish'.","file_id":"1HAXns_lhnvXIxWJYHJFi5AjahGF0e7wk","drive_link":"https://drive.google.com/file/d/1HAXns_lhnvXIxWJYHJFi5AjahGF0e7wk/view?usp=drivesdk","local":null},{"rank":2,"index":3,"timestamp":3.0,"reason":"This frame is a hero shot of the final food, showcasing the crispy texture and the sauce, which is a strong 'beauty moment'. The hand is presenting the food as the hero, not mid-action in preparation.","file_id":"1tTQGindrcFI4q0Xxc29kYb2_nKD9jj9G","drive_link":"https://drive.google.com/file/d/1tTQGindrcFI4q0Xxc29kYb2_nKD9jj9G/view?usp=drivesdk","local":null},{"rank":3,"index":21,"timestamp":21.0,"reason":"This frame shows the completed recipe cooling on a rack, offering a clear view of the finished product before final plating. It is a distinct shot from the other candidates and avoids ingredient-prep or mid-action scenes.","file_id":"14TQ9NKxqaOV123f3TMaoXren1ELb_h6T","drive_link":"https://drive.google.com/file/d/14TQ9NKxqaOV123f3TMaoXren1ELb_h6T/view?usp=drivesdk","local":null}]}}},{"sfid":"1E7WMuGyCox66ZtDMvbj4m6Na8yEJ_a9s","year":"2026","title":"GaletineJelloShots Final caps mus","brand":"Kitchn","project_id":"2601K018","source_file_name":"GaletineJelloShots_Final_clean.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1_i_WAmv2I8G6gNxZWQdXWX4vsaARbMYt","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1jjrRorXDGYqVoGbp0_NfuYDN0gxny28E","extract_folder_id":"1jjrRorXDGYqVoGbp0_NfuYDN0gxny28E","n_frames":55,"cost":0.058063750000000004,"gemini_secs":61.66,"candidates":[{"rank":1,"index":52,"timestamp":52.0,"reason":"This is a perfect clean, overhead beauty shot of the fully plated, finished recipe. The checkerboard pattern is visually appealing and it clearly shows the final product.","file_id":"1K4Vd8125VYSqLrp83Mn0tSXjp7eF62Hw","drive_link":"https://drive.google.com/file/d/1K4Vd8125VYSqLrp83Mn0tSXjp7eF62Hw/view?usp=drivesdk","local":null},{"rank":2,"index":1,"timestamp":1.0,"reason":"This is an excellent beauty shot of the finished dish from an appealing angle. It's well-lit, sharp, and showcases the jello shots beautifully on the serving tray.","file_id":"1T6WnXEfyAXGwvCc9qTfxgL2_m_oPHXNk","drive_link":"https://drive.google.com/file/d/1T6WnXEfyAXGwvCc9qTfxgL2_m_oPHXNk/view?usp=drivesdk","local":null},{"rank":3,"index":54,"timestamp":54.0,"reason":"This is a strong hero shot that shows both types of jello shots being held up, with the full platter in the background. It's a dynamic and engaging way to present the final recipe.","file_id":"1rYmMep-Pc_kTlfvx2lTifb6fkHGJm86C","drive_link":"https://drive.google.com/file/d/1rYmMep-Pc_kTlfvx2lTifb6fkHGJm86C/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1SDaWKtmWUn84EjxH-CglCfXzQkapzYM2","extract_folder_id":"1SDaWKtmWUn84EjxH-CglCfXzQkapzYM2","n_frames":55,"cost":0.00481005,"gemini_secs":41.34,"candidates":[{"rank":1,"index":53,"timestamp":53.0,"reason":"This frame provides a clean overhead shot of the completed recipe, showcasing all the finished jello shots beautifully arranged on a tray, which aligns perfectly with the 'beauty moment' and 'plated finished dish' preference.","file_id":"1llkJUlmfLYFSZzGK5wumB24AeWnbstON","drive_link":"https://drive.google.com/file/d/1llkJUlmfLYFSZzGK5wumB24AeWnbstON/view?usp=drivesdk","local":null},{"rank":2,"index":1,"timestamp":1.0,"reason":"This frame offers a close-up hero shot of the finished jello shots on the tray, highlighting their appearance and variety without any hands in action, fitting the 'hero shot of the final food' criteria.","file_id":"114WCVDyZGS6f-T2J0ytkTksTVRsyTz6k","drive_link":"https://drive.google.com/file/d/114WCVDyZGS6f-T2J0ytkTksTVRsyTz6k/view?usp=drivesdk","local":null},{"rank":3,"index":0,"timestamp":0.0,"reason":"This frame presents a single jello shot as a hero, with the full tray of finished products visible in the background. It's a dynamic 'beauty moment' that effectively showcases the final food.","file_id":"1xxyrYQVba6o6Cr52217ZcocVxcDzh6kI","drive_link":"https://drive.google.com/file/d/1xxyrYQVba6o6Cr52217ZcocVxcDzh6kI/view?usp=drivesdk","local":null}]}}},{"sfid":"1TVbF1c_T92qZ5zLXRvN3Mu-gYHlg-kz1","year":"2026","title":"GingeryPoachedEggSoup Final Mus Cap","brand":"Kitchn","project_id":"2601K008","source_file_name":"GingeryPoachedEggSoup_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/15jzaZ4l1YHaHpI-GqLtbVMR2SHN1VEg_","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1TLvnBnkxOaPU26My2gwXwL_u4Ia5gj7u","extract_folder_id":"1TLvnBnkxOaPU26My2gwXwL_u4Ia5gj7u","n_frames":29,"cost":0.031465,"gemini_secs":44.16,"candidates":[{"rank":1,"index":24,"timestamp":24.0,"reason":"This is an excellent beauty shot of the finished dish. The overhead angle shows all the components, and the spoon lifting the egg reveals the appealing runny yolk.","file_id":"17AR99ycq3KMAHhBBd7WeUc0KUbVRQ8Af","drive_link":"https://drive.google.com/file/d/17AR99ycq3KMAHhBBd7WeUc0KUbVRQ8Af/view?usp=drivesdk","local":null},{"rank":2,"index":23,"timestamp":23.0,"reason":"This is a fantastic hero shot focusing on the most enticing element: the runny egg yolk. It's a sharp, appealing close-up that makes the dish look delicious.","file_id":"1rkIzZNO7L0ckDNntDZcIo_3o0VX2Txid","drive_link":"https://drive.google.com/file/d/1rkIzZNO7L0ckDNntDZcIo_3o0VX2Txid/view?usp=drivesdk","local":null},{"rank":3,"index":0,"timestamp":0.0,"reason":"This is a clean and well-composed action shot of the soup being plated. It clearly shows the main ingredients and represents the final step of the recipe.","file_id":"1iAiTg-8X-A9ZH7W-QrM28lzc_1HTFiF6","drive_link":"https://drive.google.com/file/d/1iAiTg-8X-A9ZH7W-QrM28lzc_1HTFiF6/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1C7kuxBw3YxWRnrHCnTtZWBPi24sb-kk0","extract_folder_id":"1C7kuxBw3YxWRnrHCnTtZWBPi24sb-kk0","n_frames":29,"cost":0.0026244,"gemini_secs":39.79,"candidates":[{"rank":1,"index":23,"timestamp":23.0,"reason":"This frame is a sharp, close-up hero shot of the poached egg with a perfectly runny yolk, clearly showcasing the final food's appeal.","file_id":"1lPGpeU_dCxvuFlhtZetbvR3cuJVR3P_s","drive_link":"https://drive.google.com/file/d/1lPGpeU_dCxvuFlhtZetbvR3cuJVR3P_s/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"This frame provides a wider view of the finished soup being served into a bowl, including the poached egg and bok choy, representing a beauty moment of the plated dish.","file_id":"1rHwO2OmUxXeP1YWduoQ29jqOh5eCXc3Y","drive_link":"https://drive.google.com/file/d/1rHwO2OmUxXeP1YWduoQ29jqOh5eCXc3Y/view?usp=drivesdk","local":null},{"rank":3,"index":19,"timestamp":19.0,"reason":"This frame shows the finished soup in the bowl being garnished with sesame seeds and seaweed, highlighting the final presentation and toppings.","file_id":"1QgKw_4gJJ9H5Oirpjj091bowBFzrbYMD","drive_link":"https://drive.google.com/file/d/1QgKw_4gJJ9H5Oirpjj091bowBFzrbYMD/view?usp=drivesdk","local":null}]}}},{"sfid":"18sXy3ucOEaFXc_DWvbAK4jRVhHf_MvMa","year":"2026","title":"GnocchiSkilletChickenSausageTomato Final Mus Cap","brand":"Kitchn","project_id":"2601K007","source_file_name":"GnocchiSkilletChickenSausageTomato_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1ggFHM9fAgg2zjoOjrTM31fEaseYCiN1T","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1r0jU8f_HFuYdy5fWW_tazviRXiIl0G9K","extract_folder_id":"1r0jU8f_HFuYdy5fWW_tazviRXiIl0G9K","n_frames":30,"cost":0.034398750000000006,"gemini_secs":42.97,"candidates":[{"rank":1,"index":26,"timestamp":26.0,"reason":"This is a perfect beauty shot of the plated, finished dish. It's sharp, well-lit, and the sprinkle of cheese adds an appetizing, dynamic element without being distracting.","file_id":"1TLfdHhjT7ickj2KpNmBTpdVA0NfHyHEj","drive_link":"https://drive.google.com/file/d/1TLfdHhjT7ickj2KpNmBTpdVA0NfHyHEj/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"A great overhead hero shot of the completed recipe in the skillet. The colors are vibrant, the food looks delicious, and the frame is filled with the final product.","file_id":"1Sx2NQm_7LRdWHul-P9ZSYP6qh-d9rPLN","drive_link":"https://drive.google.com/file/d/1Sx2NQm_7LRdWHul-P9ZSYP6qh-d9rPLN/view?usp=drivesdk","local":null},{"rank":3,"index":4,"timestamp":4.0,"reason":"This is a strong, extreme close-up hero shot of a perfect bite on a spoon. It's sharp and effectively showcases the texture and ingredients of the dish.","file_id":"1Dh4ljmxAhi87iKSrYTu-cxgU2AffHaJu","drive_link":"https://drive.google.com/file/d/1Dh4ljmxAhi87iKSrYTu-cxgU2AffHaJu/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Qn0nBRcGgYNxz4uACCJNiGyPFMphIdvQ","extract_folder_id":"1Qn0nBRcGgYNxz4uACCJNiGyPFMphIdvQ","n_frames":30,"cost":0.00266865,"gemini_secs":31.74,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame provides a clean, sharp, and appealing overhead shot of the completed dish in the skillet, serving as an excellent beauty moment.","file_id":"1JIKEyL3kjguSLwPqK-aJvGLewxU-6VSY","drive_link":"https://drive.google.com/file/d/1JIKEyL3kjguSLwPqK-aJvGLewxU-6VSY/view?usp=drivesdk","local":null},{"rank":2,"index":3,"timestamp":3.0,"reason":"This frame offers a sharp hero shot of the finished dish being lifted on a wooden spoon, clearly showcasing the ingredients and texture, and is distinct from the overhead pan shot.","file_id":"1bZBhDXO45tHXMPJyQrp0pOvqC5xJxXpg","drive_link":"https://drive.google.com/file/d/1bZBhDXO45tHXMPJyQrp0pOvqC5xJxXpg/view?usp=drivesdk","local":null}]}}},{"sfid":"1TcpvImI1wPz0wETy4TqeGeYl6bbVlwe-","year":"2026","title":"Gochujang Chicken (music + caps)","brand":"Kitchn","project_id":"2601K009","source_file_name":"Gochujang Chicken CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1cjSRYQAtC0vcwVqN66QiP_Kh1-uDq2U2","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1PmnIcTeB7xNirlKTfqeABap9cO-DhVe8","extract_folder_id":"1PmnIcTeB7xNirlKTfqeABap9cO-DhVe8","n_frames":25,"cost":0.027841249999999998,"gemini_secs":40.15,"candidates":[{"rank":1,"index":14,"timestamp":14.0,"reason":"This is an excellent, clean beauty shot of the finished dish in the baking pan. It's well-lit, static, and perfectly showcases the final recipe as per the guidelines.","file_id":"1SIJJMTznnTkuwYmAVmeqNQ9FvI5vnDE7","drive_link":"https://drive.google.com/file/d/1SIJJMTznnTkuwYmAVmeqNQ9FvI5vnDE7/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This is a classic and highly appetizing hero shot. The close-up on the fork highlights the texture of the cooked chicken and makes the dish look delicious.","file_id":"1TEh-Gnn9asydu5ZF5d3QWeCNFLUjyQZE","drive_link":"https://drive.google.com/file/d/1TEh-Gnn9asydu5ZF5d3QWeCNFLUjyQZE/view?usp=drivesdk","local":null},{"rank":3,"index":0,"timestamp":0.0,"reason":"This frame shows the fully plated dish, which provides good variety. While it includes a hand mid-action, the action of pouring the sauce is dynamic and adds to the appeal, making it a strong beauty moment.","file_id":"19Q7fvT6ML6cpbZabNZaw9g1ApkLuZ2xk","drive_link":"https://drive.google.com/file/d/19Q7fvT6ML6cpbZabNZaw9g1ApkLuZ2xk/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/12IPvn3sz7amPg3V8MXYD5Cc2hsdBZ70S","extract_folder_id":"12IPvn3sz7amPg3V8MXYD5Cc2hsdBZ70S","n_frames":25,"cost":0.00229635,"gemini_secs":65.79,"candidates":[{"rank":1,"index":19,"timestamp":19.0,"reason":"This frame presents the fully assembled and garnished gochujang chicken bowl as a perfect 'beauty moment' of the finished dish, clean and appealing.","file_id":"1KRRQ5zzKhkPbSKSFYMJ1F3xiDu7_g5E_","drive_link":"https://drive.google.com/file/d/1KRRQ5zzKhkPbSKSFYMJ1F3xiDu7_g5E_/view?usp=drivesdk","local":null},{"rank":2,"index":14,"timestamp":14.0,"reason":"This frame offers a 'hero shot' of the cooked gochujang chicken thighs in the baking dish, showcasing their appealing glaze and garnishing before plating.","file_id":"13xlXWb3AWE5Q3P_P2kkbgVsJ8uWLYHnT","drive_link":"https://drive.google.com/file/d/13xlXWb3AWE5Q3P_P2kkbgVsJ8uWLYHnT/view?usp=drivesdk","local":null},{"rank":3,"index":2,"timestamp":2.0,"reason":"This frame provides a 'hero shot' of the cooked chicken's interior texture as it's lifted by a fork, effectively highlighting the quality of the final food.","file_id":"1hYk-sPYE3tEgYHETp5YiPWbiGyJipGop","drive_link":"https://drive.google.com/file/d/1hYk-sPYE3tEgYHETp5YiPWbiGyJipGop/view?usp=drivesdk","local":null}]}}},{"sfid":"1kmqSaaxV7SDdLwBtV_sTPjvmfOW1AGPs","year":"2026","title":"HalloumiFriedEgg Final Mus Cap","brand":"Kitchn","project_id":"2601K022","source_file_name":"HalloumiFriedEgg_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/12xNpWSBxWGxa-sNYT_5SMnfNWXZ4bq6m","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1WrUuqEB-B6ge8K5d1R22FSTTNI5VKce2","extract_folder_id":"1WrUuqEB-B6ge8K5d1R22FSTTNI5VKce2","n_frames":20,"cost":0.023674999999999998,"gemini_secs":31.01,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is an excellent beauty shot of the final plated dish. It's well-lit, sharp, and perfectly showcases the recipe before it's eaten.","file_id":"1qJD1cAqoBXUT3w2fIUMxk9Zpy5g_EcjG","drive_link":"https://drive.google.com/file/d/1qJD1cAqoBXUT3w2fIUMxk9Zpy5g_EcjG/view?usp=drivesdk","local":null},{"rank":2,"index":3,"timestamp":3.0,"reason":"This is a fantastic 'appetite appeal' shot showing the runny yolk. It's a dynamic and delicious-looking moment that captures the texture of the dish.","file_id":"166N6B4gpj1tjxsBulkQkLAtlwUzEPS7J","drive_link":"https://drive.google.com/file/d/166N6B4gpj1tjxsBulkQkLAtlwUzEPS7J/view?usp=drivesdk","local":null},{"rank":3,"index":5,"timestamp":5.0,"reason":"This is a strong hero shot of the perfect bite on a fork. The close-up highlights the textures of the crispy halloumi and runny yolk.","file_id":"1Gz7c6sBYZyuu3wnOxJgYzoB-DmSPzUSr","drive_link":"https://drive.google.com/file/d/1Gz7c6sBYZyuu3wnOxJgYzoB-DmSPzUSr/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1meWHnvhYy0_NA89NMuyNdLY34mUrmnoD","extract_folder_id":"1meWHnvhYy0_NA89NMuyNdLY34mUrmnoD","n_frames":20,"cost":0.0019962,"gemini_secs":26.98,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame is a clean, overhead beauty shot of the fully plated and garnished finished dish, perfectly aligning with the preference for a hero shot of the final food.","file_id":"17vURyRdAwuwBe8YjpP-5uFwEZKON0Gpn","drive_link":"https://drive.google.com/file/d/17vURyRdAwuwBe8YjpP-5uFwEZKON0Gpn/view?usp=drivesdk","local":null},{"rank":2,"index":16,"timestamp":16.0,"reason":"This frame captures a dynamic beauty moment of the finished dish, showing the knife breaking the egg yolk to reveal its appealing runny texture, which is a key feature of the recipe.","file_id":"13OJ3lNQ3ryArNipi-I7G-JRw0uLVwtRt","drive_link":"https://drive.google.com/file/d/13OJ3lNQ3ryArNipi-I7G-JRw0uLVwtRt/view?usp=drivesdk","local":null},{"rank":3,"index":4,"timestamp":4.0,"reason":"This extreme close-up highlights a perfect bite of the dish on a fork, showcasing the crispy halloumi, egg white, and runny yolk, making the food itself the hero of the shot.","file_id":"1DmS_WA4Pn2ZjGRKlEbDjaRn4_0IW4hbS","drive_link":"https://drive.google.com/file/d/1DmS_WA4Pn2ZjGRKlEbDjaRn4_0IW4hbS/view?usp=drivesdk","local":null}]}}},{"sfid":"1k_eGBYTCQLG54cf3hHbV6SKWVjmFdh-b","year":"2026","title":"JalapenoPoppers Final mus cap","brand":"Kitchn","project_id":"2602K024","source_file_name":"JalapenoPoppers_Final_Clean.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1KxKdJmxuqsFofovHMXUDMaNTuhP4y9-I","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/13BSWcXn0fQGmXGULWClasOd36U3XuaNo","extract_folder_id":"13BSWcXn0fQGmXGULWClasOd36U3XuaNo","n_frames":29,"cost":0.03235375,"gemini_secs":42.52,"candidates":[{"rank":1,"index":23,"timestamp":23.0,"reason":"This is a perfect beauty shot of the plated, finished dish. The lighting is bright and appealing, and it clearly shows the final product with its dipping sauce, which best fits the recipe content type rules.","file_id":"1RfbuZibH8psgVVkfuIQqoI-gy2D_JiDN","drive_link":"https://drive.google.com/file/d/1RfbuZibH8psgVVkfuIQqoI-gy2D_JiDN/view?usp=drivesdk","local":null},{"rank":2,"index":22,"timestamp":22.0,"reason":"This is an excellent hero shot of the freshly baked twists. The close-up view highlights the golden-brown texture and appetizing filling, making it a very strong option.","file_id":"1g8ym0ZlTnKWevrecuG1bk-5FhD8iKfhP","drive_link":"https://drive.google.com/file/d/1g8ym0ZlTnKWevrecuG1bk-5FhD8iKfhP/view?usp=drivesdk","local":null},{"rank":3,"index":27,"timestamp":27.0,"reason":"This shot shows the food being enjoyed, which is very engaging. While it features a hand in motion, it's a clean and appetizing shot of the final dish that provides a dynamic alternative to the static shots.","file_id":"1JlU-9pAopdixiWJog2q-5gFSZ8JZbujT","drive_link":"https://drive.google.com/file/d/1JlU-9pAopdixiWJog2q-5gFSZ8JZbujT/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1khW3xwRcbNfFpteaY5rd3eSbfiCDKiPY","extract_folder_id":"1khW3xwRcbNfFpteaY5rd3eSbfiCDKiPY","n_frames":29,"cost":0.0026146499999999996,"gemini_secs":32.61,"candidates":[{"rank":1,"index":23,"timestamp":23.0,"reason":"This frame presents a clean, overhead beauty shot of the fully plated and completed recipe, including the dip, perfectly aligning with the 'plated finished dish' preference and avoiding hands mid-action.","file_id":"1wn9B5WdKiGJGTflEWfmlALEq_09Izi9o","drive_link":"https://drive.google.com/file/d/1wn9B5WdKiGJGTflEWfmlALEq_09Izi9o/view?usp=drivesdk","local":null},{"rank":2,"index":22,"timestamp":22.0,"reason":"This frame offers a close-up hero shot of the final baked pastries, showcasing their golden-brown texture and delicious filling, which is a strong 'beauty moment' of the final food without any hands or action.","file_id":"1E5gBb3ojL-UiMSivjQ8jvVZNzNHXtPyO","drive_link":"https://drive.google.com/file/d/1E5gBb3ojL-UiMSivjQ8jvVZNzNHXtPyO/view?usp=drivesdk","local":null}]}}},{"sfid":"1FNRVGqIM-uetR3eAHTL_zMp2eBp0l_UK","year":"2026","title":"JanetteNewQTSweetPotato Final Mus Cap","brand":"Kitchn","project_id":"2602K012","source_file_name":"JanetteNewQTSweetPotato_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1Bl_o1SQVb7oYZLOosE0hgROD12BjOYqB","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1lkZJN3ywImEgt4YQh0q2eSZpHFn2uaru","extract_folder_id":"1lkZJN3ywImEgt4YQh0q2eSZpHFn2uaru","n_frames":22,"cost":0.024335,"gemini_secs":40.62,"candidates":[{"rank":1,"index":20,"timestamp":20.0,"reason":"This is an excellent hero shot of the final dish. It's well-lit, sharp, and clearly shows the appealing crispy texture, perfectly fitting the 'beauty moment' rule.","file_id":"1TTJcbLRsJ_F3iOetXYPW1VVc4Dh1UsYg","drive_link":"https://drive.google.com/file/d/1TTJcbLRsJ_F3iOetXYPW1VVc4Dh1UsYg/view?usp=drivesdk","local":null},{"rank":2,"index":0,"timestamp":0.0,"reason":"Another strong hero shot of the finished recipe. It clearly showcases the final product and its texture, making it a great alternative to the first choice.","file_id":"1m6L7dj7vbsUCy3XFZDp2XUDvNN0q1MZ7","drive_link":"https://drive.google.com/file/d/1m6L7dj7vbsUCy3XFZDp2XUDvNN0q1MZ7/view?usp=drivesdk","local":null},{"rank":3,"index":1,"timestamp":1.0,"reason":"This shot shows the final dish being broken open, revealing the soft interior. It's an appealing action shot that highlights the texture contrast of the recipe.","file_id":"1vsqspLW7WJt5TM7b-qfDNXBXZ56kfA6H","drive_link":"https://drive.google.com/file/d/1vsqspLW7WJt5TM7b-qfDNXBXZ56kfA6H/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1yc9CCBG7oLgU-oTg6JYS1gv7pC_cu0yr","extract_folder_id":"1yc9CCBG7oLgU-oTg6JYS1gv7pC_cu0yr","n_frames":22,"cost":0.001971,"gemini_secs":32.25,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame is a clear hero shot of the finished sweet potato with its appealing crispy topping, representing a strong 'beauty moment' of the completed recipe.","file_id":"13bKJ0uHR1jJn7n1T_qFquSfMPcQEDw8Y","drive_link":"https://drive.google.com/file/d/13bKJ0uHR1jJn7n1T_qFquSfMPcQEDw8Y/view?usp=drivesdk","local":null},{"rank":2,"index":1,"timestamp":1.0,"reason":"This frame provides a different perspective of the finished dish by showcasing the soft, orange interior of the sweet potato, offering a diverse 'beauty moment' from a distinct shot.","file_id":"168WU9X_zobwd5BLH0ERQs1-Yj9U89ulY","drive_link":"https://drive.google.com/file/d/168WU9X_zobwd5BLH0ERQs1-Yj9U89ulY/view?usp=drivesdk","local":null}]}}},{"sfid":"1L2qdEBdPhzrd1DmJ6e1J51PufTXBn9MA","year":"2026","title":"LemonPuddingCake Final2 Mus Cap","brand":"Kitchn","project_id":"2602K011","source_file_name":"LemonPuddingCake_Final2_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/18ONaDd7q_tt4KI3oym8FF3HDNuloUDjp","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1pe1wr2upwlRZMR-Kd7t2UCBX01QeiiYj","extract_folder_id":"1pe1wr2upwlRZMR-Kd7t2UCBX01QeiiYj","n_frames":24,"cost":0.02758125,"gemini_secs":53.49,"candidates":[{"rank":1,"index":23,"timestamp":23.0,"reason":"This is a perfect hero shot of the finished dish. The close-up is justified as it beautifully showcases the dual texture of the cake and pudding layers, which is the unique selling point of this recipe. It's sharp, well-lit, and very appetizing.","file_id":"1H83-UwYLxkbh630cxEEC4C6oaPU3G_RD","drive_link":"https://drive.google.com/file/d/1H83-UwYLxkbh630cxEEC4C6oaPU3G_RD/view?usp=drivesdk","local":null},{"rank":2,"index":21,"timestamp":21.0,"reason":"This frame provides a wider view of the finished cakes, offering a different perspective from the close-up hero shot. While it includes a hand in motion, the action is a final garnish, which adds to the 'beauty moment' and feels less like a prep step.","file_id":"1svKp6WufH682ewlNqMWiP-qDCp7TmhQk","drive_link":"https://drive.google.com/file/d/1svKp6WufH682ewlNqMWiP-qDCp7TmhQk/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1RPkcTl57QtWPU_Ysab3aOhUPaH8uo_5l","extract_folder_id":"1RPkcTl57QtWPU_Ysab3aOhUPaH8uo_5l","n_frames":24,"cost":0.0022177499999999997,"gemini_secs":33.31,"candidates":[{"rank":1,"index":2,"timestamp":2.0,"reason":"This frame is a clear beauty shot of the finished lemon pudding cake, showing it plated in its dish with powdered sugar and lemon zest. The spoon helps illustrate the unique texture of the dish without being a distracting mid-action prep shot.","file_id":"1s7vIqu7sBkE2uNIhyUDDx41xeD-00jOi","drive_link":"https://drive.google.com/file/d/1s7vIqu7sBkE2uNIhyUDDx41xeD-00jOi/view?usp=drivesdk","local":null},{"rank":2,"index":22,"timestamp":22.0,"reason":"This frame provides an excellent close-up hero shot of the spoonful, clearly showcasing the distinct cake and creamy pudding layers, which is a key characteristic of this recipe. It is sharp, graphics-free, and from a different shot than the first candidate.","file_id":"1ThlhVPbf8Db9Rukh-8TsS_RaqtbSUeWT","drive_link":"https://drive.google.com/file/d/1ThlhVPbf8Db9Rukh-8TsS_RaqtbSUeWT/view?usp=drivesdk","local":null}]}}},{"sfid":"17Kv3Nn22eHGLJZs6M1Mw1kWX0Cft4a-L","year":"2026","title":"LoadedHashBrownFlights Final Mus Cap","brand":"Kitchn","project_id":"2603K006","source_file_name":"LoadedHashBrownFlights_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1UQyghsu3vsAz6SpNoSXu7aftQuEvRXKf","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1sajEy4wZvmThGR-PGledlxrGsAIQy5d6","extract_folder_id":"1sajEy4wZvmThGR-PGledlxrGsAIQy5d6","n_frames":28,"cost":0.03130375,"gemini_secs":46.66,"candidates":[{"rank":1,"index":2,"timestamp":2.0,"reason":"This is a perfect beauty shot of the final plated dish. The clean overhead angle clearly shows all four variations of the recipe, which is the core concept of the video.","file_id":"18zJhAw3EQBwV0rtu1G-_jL-heS4wAs1A","drive_link":"https://drive.google.com/file/d/18zJhAw3EQBwV0rtu1G-_jL-heS4wAs1A/view?usp=drivesdk","local":null},{"rank":2,"index":1,"timestamp":1.0,"reason":"This is a strong alternative overhead shot that shows both plain and topped hash browns, hinting at the recipe's transformation. It's clean, well-composed, and appetizing.","file_id":"1W0TQlDEOFWXo-yamA1LYEQplFBkM9J73","drive_link":"https://drive.google.com/file/d/1W0TQlDEOFWXo-yamA1LYEQplFBkM9J73/view?usp=drivesdk","local":null},{"rank":3,"index":7,"timestamp":7.0,"reason":"This is an excellent hero shot of a single, completed hash brown. The close-up highlights the appealing ingredients and textures of one of the variations.","file_id":"1zOgH4ziezXGAtJfkIV1THNoK7yxHq89n","drive_link":"https://drive.google.com/file/d/1zOgH4ziezXGAtJfkIV1THNoK7yxHq89n/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1vhvMp-BCe4nC7t8lfjUU-R2riEqRDHx0","extract_folder_id":"1vhvMp-BCe4nC7t8lfjUU-R2riEqRDHx0","n_frames":28,"cost":0.00249585,"gemini_secs":28.58,"candidates":[{"rank":1,"index":2,"timestamp":2.0,"reason":"This frame is a clean overhead shot of all four completed hash brown flights, representing the final dish beautifully and fitting the 'beauty moment' and 'completed recipe' criteria perfectly.","file_id":"1zRZypdB5NSX2oEgYEl9MTiz-rgT7ncxU","drive_link":"https://drive.google.com/file/d/1zRZypdB5NSX2oEgYEl9MTiz-rgT7ncxU/view?usp=drivesdk","local":null},{"rank":2,"index":7,"timestamp":7.0,"reason":"This frame showcases one of the completed hash brown flights (smoked salmon) in a clear, appealing close-up, adhering to the 'hero shot of the final food' rule without hands or motion blur.","file_id":"1LIDpIqN-cEoPmrEgHojP_gjTlFvFmZjR","drive_link":"https://drive.google.com/file/d/1LIDpIqN-cEoPmrEgHojP_gjTlFvFmZjR/view?usp=drivesdk","local":null},{"rank":3,"index":11,"timestamp":11.0,"reason":"This frame presents another distinct completed hash brown flight (creamy mixture with crumbled cheese) in a clean, focused shot, providing variety while meeting the beauty moment criteria.","file_id":"1RSGgXjxlNfRnaqvXjbPYC3LDroWdGxli","drive_link":"https://drive.google.com/file/d/1RSGgXjxlNfRnaqvXjbPYC3LDroWdGxli/view?usp=drivesdk","local":null}]}}},{"sfid":"1a-wKAxBernpSB29fYNjpzx_z8qWt6xpp","year":"2026","title":"LoadedSmashedPotatoes Final Mus Cap","brand":"Kitchn","project_id":"2601K021","source_file_name":"LoadedSmashedPotatoes_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1VwISFVIG8jSp6OfIkP-4DIw_IBq1IszH","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1w0sMXxcpf9_U9ZZPDVKoPryt8Srqjkut","extract_folder_id":"1w0sMXxcpf9_U9ZZPDVKoPryt8Srqjkut","n_frames":28,"cost":0.030566250000000003,"gemini_secs":40.6,"candidates":[{"rank":1,"index":2,"timestamp":2.0,"reason":"This is an excellent hero shot of the final, plated dish. It's sharp, well-lit, and clearly shows all the delicious toppings. The hand is presenting the food, not in the middle of a prep action.","file_id":"1yhrZq5xDiHg_IBKzAyE_tUDldKFLqje1","drive_link":"https://drive.google.com/file/d/1yhrZq5xDiHg_IBKzAyE_tUDldKFLqje1/view?usp=drivesdk","local":null},{"rank":2,"index":24,"timestamp":24.0,"reason":"This is another strong hero shot of the finished dish from a different, appealing overhead angle. It shows the context of the full tray of potatoes, highlighting the recipe's result.","file_id":"1QH_HeWUB5lrp-pD3ul4J3hWka5lMFoLT","drive_link":"https://drive.google.com/file/d/1QH_HeWUB5lrp-pD3ul4J3hWka5lMFoLT/view?usp=drivesdk","local":null},{"rank":3,"index":18,"timestamp":18.0,"reason":"This is a great beauty shot of the potatoes on the baking sheet with melted cheese. It has no hands, providing a clean, static view of the recipe at a key, appealing stage.","file_id":"15zbydGfeKNNGxy7-Zi-Rj9x0XB21htjz","drive_link":"https://drive.google.com/file/d/15zbydGfeKNNGxy7-Zi-Rj9x0XB21htjz/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1IKAZAWi8w0hOUjkgLxKczvogL8wz2siD","extract_folder_id":"1IKAZAWi8w0hOUjkgLxKczvogL8wz2siD","n_frames":28,"cost":0.00257055,"gemini_secs":34.85,"candidates":[{"rank":1,"index":24,"timestamp":24.0,"reason":"This frame provides the best overall 'beauty moment' of the completed, fully loaded smashed potatoes on the baking sheet, offering a clean overhead view of the final dish, despite the hand picking one up.","file_id":"1WP3fcmi-d-Mw3mDKie23IcWHgyIl1gNJ","drive_link":"https://drive.google.com/file/d/1WP3fcmi-d-Mw3mDKie23IcWHgyIl1gNJ/view?usp=drivesdk","local":null},{"rank":2,"index":2,"timestamp":2.0,"reason":"This frame is a strong hero shot of a single, fully loaded smashed potato, clearly showcasing all the delicious toppings, even with the hand holding it.","file_id":"12zZHvi0jBgWpZfDdpx9DAiWc2cvIsBSw","drive_link":"https://drive.google.com/file/d/12zZHvi0jBgWpZfDdpx9DAiWc2cvIsBSw/view?usp=drivesdk","local":null},{"rank":3,"index":18,"timestamp":18.0,"reason":"This frame offers a clean, appealing 'beauty moment' of the roasted smashed potatoes covered in melted cheese, representing a key delicious intermediate stage of the recipe without any hands in action.","file_id":"1AmpVUlDHDd5mie7UnI3q0OufV6CX39bq","drive_link":"https://drive.google.com/file/d/1AmpVUlDHDd5mie7UnI3q0OufV6CX39bq/view?usp=drivesdk","local":null}]}}},{"sfid":"1deVEO2DPpjMQDX64XkOO-LXO7olta2Yh","year":"2026","title":"Omelette Egg Hack FINAL Caps","brand":"Kitchn","project_id":"2601K025","source_file_name":"Omelette Egg Hack_CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1Ye2MBI9Sti4ypvTwE9NGgNGWwSlxQa3_","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1YzJFqjxOCVePDL-JQTZY_6YuiSJo9rc1","extract_folder_id":"1YzJFqjxOCVePDL-JQTZY_6YuiSJo9rc1","n_frames":36,"cost":0.038193750000000005,"gemini_secs":43.88,"candidates":[{"rank":1,"index":35,"timestamp":35.0,"reason":"This is the best beauty shot of the final, plated dish. It's well-composed, sharp, and shows the finished recipe ready to eat, which perfectly fits the content rules.","file_id":"1UmtDc2Amf9BqQoFXi6FsB66ahhHfz4Pk","drive_link":"https://drive.google.com/file/d/1UmtDc2Amf9BqQoFXi6FsB66ahhHfz4Pk/view?usp=drivesdk","local":null},{"rank":2,"index":25,"timestamp":25.0,"reason":"This is a strong hero shot of the omelette just after cooking. The close-up framing, browning, and steam make it look very appealing.","file_id":"1l0YdNDk3TRUIGvoEze853RTRzC9c2IJY","drive_link":"https://drive.google.com/file/d/1l0YdNDk3TRUIGvoEze853RTRzC9c2IJY/view?usp=drivesdk","local":null},{"rank":3,"index":21,"timestamp":21.0,"reason":"This frame clearly shows the perfectly folded omelette in the pan. It's a clean, static shot of a key moment in the recipe before plating.","file_id":"17jpFYBTYj9qkmNXUZbutPftyUHUjmrvQ","drive_link":"https://drive.google.com/file/d/17jpFYBTYj9qkmNXUZbutPftyUHUjmrvQ/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1CE19OUud4hWzkanZXL3Oa_agVPkMCyK5","extract_folder_id":"1CE19OUud4hWzkanZXL3Oa_agVPkMCyK5","n_frames":36,"cost":0.0031864500000000004,"gemini_secs":34.75,"candidates":[{"rank":1,"index":35,"timestamp":35.0,"reason":"This frame is a perfect beauty shot of the plated finished dish, showcasing the omelette with toppings on a clean plate without any hands in action.","file_id":"1JneNOmy5fH0N4XS1Up8R2Dx-TQ_lqS54","drive_link":"https://drive.google.com/file/d/1JneNOmy5fH0N4XS1Up8R2Dx-TQ_lqS54/view?usp=drivesdk","local":null},{"rank":2,"index":25,"timestamp":25.0,"reason":"This frame provides a clear hero shot of the fully cooked omelette still in the pan, with steam rising, and no hands are visible, making it a strong beauty moment.","file_id":"1uQsLOf2rvhe38ilOS5kp5zmb0bEUZyIU","drive_link":"https://drive.google.com/file/d/1uQsLOf2rvhe38ilOS5kp5zmb0bEUZyIU/view?usp=drivesdk","local":null}]}}},{"sfid":"1toH8SoaEqqFq8Rs5TeaBta5g4jxSy3aV","year":"2026","title":"OnePanMeatballs Final Mus Cap","brand":"Kitchn","project_id":"2601K001","source_file_name":"OnePanMeatballs_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/183_Ar1sWQBSk-8HXOoSi9ToYD3CLqvv-","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1-6q0ldYKneB0-anCU49dg2s8GNS4reRO","extract_folder_id":"1-6q0ldYKneB0-anCU49dg2s8GNS4reRO","n_frames":31,"cost":0.03436,"gemini_secs":42.37,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is a fantastic hero shot. The cheese pull is dramatic and appetizing, and the framing clearly shows the final dish being served.","file_id":"1Zl9EjLZGXZ5QH6BnypdOieU3qvajwNXx","drive_link":"https://drive.google.com/file/d/1Zl9EjLZGXZ5QH6BnypdOieU3qvajwNXx/view?usp=drivesdk","local":null},{"rank":2,"index":27,"timestamp":27.0,"reason":"This is a perfect overhead beauty shot of the completed recipe. It's clean, well-lit, and shows the entire delicious-looking dish.","file_id":"1WbdycvpJK0X3z-PsZJPo8dTLht0wpAjf","drive_link":"https://drive.google.com/file/d/1WbdycvpJK0X3z-PsZJPo8dTLht0wpAjf/view?usp=drivesdk","local":null},{"rank":3,"index":5,"timestamp":5.0,"reason":"This is a strong, focused hero shot of a single serving. The close-up highlights the textures of the meatball and melted cheese beautifully.","file_id":"1j47QwiBggLK4O0hYHFL_-E7VtHCN2yAZ","drive_link":"https://drive.google.com/file/d/1j47QwiBggLK4O0hYHFL_-E7VtHCN2yAZ/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1spy6gwMieja3dVwCxFtkiGj471alqQ1b","extract_folder_id":"1spy6gwMieja3dVwCxFtkiGj471alqQ1b","n_frames":31,"cost":0.0027762,"gemini_secs":33.18,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame captures a dynamic 'cheese pull' moment, showcasing the melted cheese and meatballs as a hero shot of the final dish. It is sharp and graphics-free.","file_id":"1anLIC96V2x6AbWWrBj7g0QoWY78WPJ1w","drive_link":"https://drive.google.com/file/d/1anLIC96V2x6AbWWrBj7g0QoWY78WPJ1w/view?usp=drivesdk","local":null},{"rank":2,"index":24,"timestamp":24.0,"reason":"This is a clean overhead shot of the completed recipe, featuring perfectly melted, bubbly cheese and garnished meatballs, representing a strong beauty moment.","file_id":"1_934zazPEDAw59PyvhOjWSTlW-1wO2L5","drive_link":"https://drive.google.com/file/d/1_934zazPEDAw59PyvhOjWSTlW-1wO2L5/view?usp=drivesdk","local":null},{"rank":3,"index":3,"timestamp":3.0,"reason":"This frame offers another appealing 'cheese pull' shot from a slightly different angle, highlighting the gooey cheese and the finished meatballs. It is sharp and graphics-free.","file_id":"12YMubQYszWqk9JEfzvawqSNer8irKttX","drive_link":"https://drive.google.com/file/d/12YMubQYszWqk9JEfzvawqSNer8irKttX/view?usp=drivesdk","local":null}]}}},{"sfid":"13s8zOnJ9QisOIOXINWGWswB7EgMEP9oW","year":"2026","title":"ShavedBakedPeels Final Mus Cap","brand":"Kitchn","project_id":"2601K017","source_file_name":"ShavedBakedPeels_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1PrfE0f7_zzN_5Y57pAcAX3eZLlGalQah","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1cWLyOI-GrW4qUWoz7jjSk99-h3ftNiDd","extract_folder_id":"1cWLyOI-GrW4qUWoz7jjSk99-h3ftNiDd","n_frames":31,"cost":0.03410125,"gemini_secs":42.04,"candidates":[{"rank":1,"index":22,"timestamp":22.0,"reason":"This is a perfect beauty shot. The overhead angle is clean, the dish looks appetizing, and it's free of hands or distracting motion. The colors are vibrant and it clearly shows the recipe's components.","file_id":"1a5D9NCYIsbQQANoIY_pO37yDuiYqthW3","drive_link":"https://drive.google.com/file/d/1a5D9NCYIsbQQANoIY_pO37yDuiYqthW3/view?usp=drivesdk","local":null},{"rank":2,"index":30,"timestamp":30.0,"reason":"This is a strong hero shot of the finished dish on a fork. It's a classic, compelling food thumbnail that makes the viewer want to eat the recipe. It clearly shows the final product.","file_id":"1jF1APyO1rSj_gPkOuClHEhTg7PrvVh6-","drive_link":"https://drive.google.com/file/d/1jF1APyO1rSj_gPkOuClHEhTg7PrvVh6-/view?usp=drivesdk","local":null},{"rank":3,"index":24,"timestamp":24.0,"reason":"This is a good, wide shot of the nearly-finished dish on the baking sheet. It's sharp, well-lit, and shows the recipe at a key stage, making it a solid choice.","file_id":"1X-gQA9K_2Zs4YnzHUU6Hgi9TNChzoMot","drive_link":"https://drive.google.com/file/d/1X-gQA9K_2Zs4YnzHUU6Hgi9TNChzoMot/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Oj1_QI2fUH6v7coB1K1Cu_Qnw9NeFjYg","extract_folder_id":"1Oj1_QI2fUH6v7coB1K1Cu_Qnw9NeFjYg","n_frames":31,"cost":0.00277275,"gemini_secs":34.85,"candidates":[{"rank":1,"index":24,"timestamp":24.0,"reason":"This frame is a clean overhead shot of the almost completed recipe, showcasing the roasted carrot peels with feta, pistachios, and balsamic drizzle, fitting the 'beauty moment' and 'clean overhead' criteria perfectly without hands.","file_id":"1HmaiGDKQgu30K5BZz4rEK-d1BOuD6C3s","drive_link":"https://drive.google.com/file/d/1HmaiGDKQgu30K5BZz4rEK-d1BOuD6C3s/view?usp=drivesdk","local":null},{"rank":2,"index":22,"timestamp":22.0,"reason":"This frame provides another excellent 'beauty moment' with a clean overhead view of the roasted carrot peels topped with feta and pistachios, before the final drizzle. It is distinct from the rank 1 candidate and avoids hands.","file_id":"1eVqVhS2OHmAzXU-Kf8bVI7KlTfrYab3z","drive_link":"https://drive.google.com/file/d/1eVqVhS2OHmAzXU-Kf8bVI7KlTfrYab3z/view?usp=drivesdk","local":null},{"rank":3,"index":20,"timestamp":20.0,"reason":"This frame offers a clean overhead shot of the roasted carrot peels after cooking, serving as a good representation of the main ingredient in its cooked state. It avoids hands and active prep, providing a distinct clean food shot.","file_id":"1mOQ-kUf6NdUDZLc06zH9qCwSEqy9WYM1","drive_link":"https://drive.google.com/file/d/1mOQ-kUf6NdUDZLc06zH9qCwSEqy9WYM1/view?usp=drivesdk","local":null}]}}},{"sfid":"1OR3KaN6BjqpoGNpd5MtbHjhs2GmzjiR3","year":"2026","title":"skilletpancake Final caps mus","brand":"Kitchn","project_id":"2601K004","source_file_name":"skilletpancake_Final_clean.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1rjxr3jaqVHaojBP7uzIcISqOst9H-Bcn","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1C9jnJ40FDZRwaYwv2q32UhaxiP40EGTI","extract_folder_id":"1C9jnJ40FDZRwaYwv2q32UhaxiP40EGTI","n_frames":29,"cost":0.03253125,"gemini_secs":49.9,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is a perfect hero shot. It's a clean, sharp, overhead view of the finished recipe, which is the most preferred shot type for this content.","file_id":"1vMReTz4EQ1WXwbB17S_U45rDAndFVcIo","drive_link":"https://drive.google.com/file/d/1vMReTz4EQ1WXwbB17S_U45rDAndFVcIo/view?usp=drivesdk","local":null},{"rank":2,"index":27,"timestamp":27.0,"reason":"This is a strong plated shot of the finished dish. It's a good beauty moment that shows a single serving ready to be eaten, and the action is minimal.","file_id":"1Krc2Pzbyn2zHQ_lym4jy0AHZWCx8GgjD","drive_link":"https://drive.google.com/file/d/1Krc2Pzbyn2zHQ_lym4jy0AHZWCx8GgjD/view?usp=drivesdk","local":null},{"rank":3,"index":25,"timestamp":25.0,"reason":"This is a dynamic shot showing a slice being served from the pan. While it's a mid-action shot, it's visually appealing and shows both the full dish and its fluffy interior.","file_id":"1l4ECmY4Ndx-0rZ2Bg4kwourFU-bOPYhr","drive_link":"https://drive.google.com/file/d/1l4ECmY4Ndx-0rZ2Bg4kwourFU-bOPYhr/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1JlY-zxFZYfu_j9lymAZii3wFFlv0663K","extract_folder_id":"1JlY-zxFZYfu_j9lymAZii3wFFlv0663K","n_frames":29,"cost":0.00265395,"gemini_secs":37.06,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame provides a clean overhead hero shot of the entire finished blueberry pancake in the skillet, perfectly aligning with the preference for a 'hero shot of the final food' and 'clean overhead of the completed recipe'.","file_id":"19QQRHknZQB-fSyT9YZbwCs4AdfBORwTu","drive_link":"https://drive.google.com/file/d/19QQRHknZQB-fSyT9YZbwCs4AdfBORwTu/view?usp=drivesdk","local":null},{"rank":2,"index":1,"timestamp":1.0,"reason":"This frame captures a close-up beauty moment of a plated slice of blueberry pancake with butter, as maple syrup is being poured, showcasing the deliciousness of the finished dish without hands mid-action.","file_id":"1iWPQmvd84KuQTBcKphcgFKuo23SfEOzn","drive_link":"https://drive.google.com/file/d/1iWPQmvd84KuQTBcKphcgFKuo23SfEOzn/view?usp=drivesdk","local":null},{"rank":3,"index":26,"timestamp":26.0,"reason":"This frame offers another distinct beauty shot of a plated slice of blueberry pancake with butter, being drizzled with maple syrup, providing a different angle of the appealing finished dish.","file_id":"1PBxgQeGbgL9LkEiwTHE_cDWMCNiRFqVf","drive_link":"https://drive.google.com/file/d/1PBxgQeGbgL9LkEiwTHE_cDWMCNiRFqVf/view?usp=drivesdk","local":null}]}}},{"sfid":"1ePJD1E-NkEDB7e_1aystQz-h1Q6MvKuK","year":"2026","title":"Splurge or Save Strawberries v2","brand":"Kitchn","project_id":"2602K004","source_file_name":"Splurge or Save - Strawberries CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1Ly8HfzQPX8Kqwa6TPd9pO0Oy-jtBryiZ","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1MQH6wslzU3_5hLtig6PGSKjopPYMzaET","extract_folder_id":"1MQH6wslzU3_5hLtig6PGSKjopPYMzaET","n_frames":60,"cost":0.06293499999999999,"gemini_secs":79.64,"candidates":[{"rank":1,"index":57,"timestamp":57.0,"reason":"This is a perfect beauty shot. The clean overhead framing of the two plates of strawberries is visually appealing and clearly communicates the comparison theme of the video.","file_id":"1z6_i5wOSBCFvJOdTfnveiOVbEQ-PRmbY","drive_link":"https://drive.google.com/file/d/1z6_i5wOSBCFvJOdTfnveiOVbEQ-PRmbY/view?usp=drivesdk","local":null},{"rank":2,"index":54,"timestamp":54.0,"reason":"This is an excellent hero shot of a single, perfectly shaped strawberry. It's a beautiful close-up that highlights the quality of the ingredient, making it very enticing.","file_id":"1u5oHzvNtMyU_dTt23SFGPnPz15mCu6Q_","drive_link":"https://drive.google.com/file/d/1u5oHzvNtMyU_dTt23SFGPnPz15mCu6Q_/view?usp=drivesdk","local":null},{"rank":3,"index":25,"timestamp":25.0,"reason":"This is another strong hero shot of a single strawberry. It's clean, sharp, and provides a great alternative to the other close-up, focusing entirely on the food.","file_id":"1gWHZnhYcqd9bVvYVnus8raxPjk_G3J3z","drive_link":"https://drive.google.com/file/d/1gWHZnhYcqd9bVvYVnus8raxPjk_G3J3z/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1Dr0hgYPmheesiHseqEDQ64N365hKs5kI","extract_folder_id":"1Dr0hgYPmheesiHseqEDQ64N365hKs5kI","n_frames":60,"cost":0.0052937999999999995,"gemini_secs":55.02,"candidates":[{"rank":1,"index":57,"timestamp":57.0,"reason":"This frame provides a clean, overhead shot of both plates of strawberries, representing the 'splurge or save' comparison, which is a strong 'plated finished dish' moment without hands or people's faces as the primary focus.","file_id":"1rE_VvAnD3Ju0CO8hGpdNqZMNovXwQgne","drive_link":"https://drive.google.com/file/d/1rE_VvAnD3Ju0CO8hGpdNqZMNovXwQgne/view?usp=drivesdk","local":null},{"rank":2,"index":25,"timestamp":25.0,"reason":"This frame is a sharp, graphics-free hero shot of a single strawberry on a plate, fulfilling the 'hero shot of the final food' criteria.","file_id":"1j0nwCJFRS0jRfviqDuLVbbYHjCn-UoND","drive_link":"https://drive.google.com/file/d/1j0nwCJFRS0jRfviqDuLVbbYHjCn-UoND/view?usp=drivesdk","local":null},{"rank":3,"index":55,"timestamp":55.0,"reason":"This frame is another excellent hero shot of a single strawberry on a plate, similar to frame 25 but from a different shot, ensuring diversity among the candidates.","file_id":"197drbCcEAg5u9Ljr0V5bmxh1VF0lnQgo","drive_link":"https://drive.google.com/file/d/197drbCcEAg5u9Ljr0V5bmxh1VF0lnQgo/view?usp=drivesdk","local":null}]}}},{"sfid":"1nlMIF8eyVgsxVSfzIZKWLiK1QHsiqRpW","year":"2026","title":"Splurge or Save WIngs","brand":"Kitchn","project_id":"2602K005","source_file_name":"Splurge or Save - WIngs CLEAN.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1p6FvbPAPv8XtJRwC5wXTy7S1Hekm-Wml","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/19o_agJCwAdzaHE0jbei8QA3c-nVAvA4P","extract_folder_id":"19o_agJCwAdzaHE0jbei8QA3c-nVAvA4P","n_frames":60,"cost":0.06293374999999998,"gemini_secs":72.66,"candidates":[{"rank":1,"index":59,"timestamp":59.0,"reason":"This is an excellent hero shot of the food. The close-up on the wing coated in sauce is highly appetizing, sharp, and fits the 'beauty moment' rule perfectly.","file_id":"1U4j838sZ-XY8ZTMmErIgL7dvvlVPFFaa","drive_link":"https://drive.google.com/file/d/1U4j838sZ-XY8ZTMmErIgL7dvvlVPFFaa/view?usp=drivesdk","local":null},{"rank":2,"index":17,"timestamp":17.0,"reason":"A great hero shot of a crispy, golden-brown chicken wing. It's well-lit, sharp, and clearly showcases the texture of the finished product.","file_id":"1sMPH2MhBe1cl_hyRhzAU90K0aSBn8hj8","drive_link":"https://drive.google.com/file/d/1sMPH2MhBe1cl_hyRhzAU90K0aSBn8hj8/view?usp=drivesdk","local":null},{"rank":3,"index":31,"timestamp":31.0,"reason":"This is a strong, clean shot of the plated finished dish. It's a classic food beauty shot that clearly shows a generous portion of wings without any distracting elements.","file_id":"1ZS6q8E52ynCorbI5PMXFt_CjE87XkHkx","drive_link":"https://drive.google.com/file/d/1ZS6q8E52ynCorbI5PMXFt_CjE87XkHkx/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1s_90-YoxR574NmDEJq3cSkeDKEXotuUh","extract_folder_id":"1s_90-YoxR574NmDEJq3cSkeDKEXotuUh","n_frames":60,"cost":0.00512625,"gemini_secs":59.59,"candidates":[{"rank":1,"index":12,"timestamp":12.0,"reason":"This frame captures the 'beauty moment' of the plated finished dish (two plates of chicken wings) without any text overlays or hands actively interacting with the food, and it features a clear, wider shot.","file_id":"1panPKx3mI9MIJuiEgr4GBNboLs0wiCuF","drive_link":"https://drive.google.com/file/d/1panPKx3mI9MIJuiEgr4GBNboLs0wiCuF/view?usp=drivesdk","local":null}]}}},{"sfid":"1EGoIO0MKkQwxirAUXb_j6DBiQ8B4ju2s","year":"2026","title":"Spring Gathering Promo Video - Spring Issue 26 Recipes ALPHA","brand":"Kitchn","project_id":"2603K001","source_file_name":"Spring Issue_26 Recipes_ALPHA.mov","parent_folder_link":"https://drive.google.com/drive/folders/1-0L27eRZEPyazrkrycH88mFHDoHGJ3kZ","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1JlSMp2QQNLkdnTC8SK-As7viePjAG8vn","extract_folder_id":"1JlSMp2QQNLkdnTC8SK-As7viePjAG8vn","n_frames":12,"cost":0.013770000000000001,"gemini_secs":18.45,"candidates":[]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/16OdJziUL4f2U6vpewAR3fhkV5ippX1Wf","extract_folder_id":"16OdJziUL4f2U6vpewAR3fhkV5ippX1Wf","n_frames":12,"cost":0.0012,"gemini_secs":16.61,"candidates":[{"rank":1,"index":10,"timestamp":10.0,"reason":"This is the only frame that satisfies the hard constraints of being sharp and graphics-free. Although it is a black screen and provides no visual content related to a recipe, it is the only technically valid option based on the strict interpretation of the rules.","file_id":"1q0Wwq1sEwt0EQY51eRukho3QR4S5eV3v","drive_link":"https://drive.google.com/file/d/1q0Wwq1sEwt0EQY51eRukho3QR4S5eV3v/view?usp=drivesdk","local":null}]}}},{"sfid":"1y4wZg549z3PaTJQnbEkIZvXVBTHqAyss","year":"2026","title":"SPRING ISSUE 4x5 v6 FINAL","brand":"Kitchn","project_id":"2603K001","source_file_name":"SPRING ISSUE_4x5 v6 _FINAL.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1-0L27eRZEPyazrkrycH88mFHDoHGJ3kZ","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1WZbuNEsiLT09s-51aRk-Lvcpmv_-iCXU","extract_folder_id":"1WZbuNEsiLT09s-51aRk-Lvcpmv_-iCXU","n_frames":12,"cost":0.01584625,"gemini_secs":22.11,"candidates":[{"rank":1,"index":8,"timestamp":8.0,"reason":"This is a clean, sharp, and appealing beauty shot of the finished dessert. It has no text overlays or motion blur, perfectly fitting all constraints.","file_id":"14BmDuC4OxifZ94oMZYYS59w_8hKzYde6","drive_link":"https://drive.google.com/file/d/14BmDuC4OxifZ94oMZYYS59w_8hKzYde6/view?usp=drivesdk","local":null},{"rank":2,"index":9,"timestamp":9.0,"reason":"This is an excellent overhead shot of a finished pasta salad. It is sharp, well-composed, and free of any graphics, making it a strong second choice from a different shot.","file_id":"1zJZBHfRyqy5XBKpkV8KBd4F38c0oXufn","drive_link":"https://drive.google.com/file/d/1zJZBHfRyqy5XBKpkV8KBd4F38c0oXufn/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1n-yqTeeWTUtt0Q6zXu6xI6KgdWmmp4Uz","extract_folder_id":"1n-yqTeeWTUtt0Q6zXu6xI6KgdWmmp4Uz","n_frames":12,"cost":0.00124635,"gemini_secs":14.8,"candidates":[{"rank":1,"index":8,"timestamp":8.0,"reason":"This frame is a sharp, graphics-free hero shot of plated lemon bars, perfectly fitting the 'beauty moment' and 'plated finished dish' criteria for a recipe video.","file_id":"1j-6H-UKke42dPaaf98pTcZcaI1SL1EeQ","drive_link":"https://drive.google.com/file/d/1j-6H-UKke42dPaaf98pTcZcaI1SL1EeQ/view?usp=drivesdk","local":null},{"rank":2,"index":9,"timestamp":9.0,"reason":"This frame presents a sharp, graphics-free, clean overhead shot of a completed pasta salad, aligning with the 'beauty moment' and 'clean overhead of the completed recipe' guidelines.","file_id":"1NN1zYNBWt9rxet-unJcY6z2RZIIup-yc","drive_link":"https://drive.google.com/file/d/1NN1zYNBWt9rxet-unJcY6z2RZIIup-yc/view?usp=drivesdk","local":null}]}}},{"sfid":"1oEKHnRJ6_O9evEw94Sn3u6b7okov0CsS","year":"2026","title":"SPRING ISSUE 9x16 v2 FINAL","brand":"Kitchn","project_id":"2603K001","source_file_name":"SPRING ISSUE_9x16 v2 _FINAL.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1-0L27eRZEPyazrkrycH88mFHDoHGJ3kZ","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1uLy8HSDgtOFw_S9Fa8iy_3njqhoJQ_Ze","extract_folder_id":"1uLy8HSDgtOFw_S9Fa8iy_3njqhoJQ_Ze","n_frames":12,"cost":0.0159175,"gemini_secs":23.67,"candidates":[{"rank":1,"index":8,"timestamp":8.0,"reason":"This is an excellent, sharp hero shot of a finished dessert. The lighting is bright and the composition is very appealing, making it a perfect beauty moment.","file_id":"1Hcz_qFkP6842iuzC2Us2t32Ve7n5W9v-","drive_link":"https://drive.google.com/file/d/1Hcz_qFkP6842iuzC2Us2t32Ve7n5W9v-/view?usp=drivesdk","local":null},{"rank":2,"index":9,"timestamp":9.0,"reason":"A clean and appetizing overhead shot of a finished pasta salad. It's sharp, graphics-free, and provides good variety by showcasing a savory dish.","file_id":"11A0OUFHMwC4zh32iMndS24iGrEtZQCy5","drive_link":"https://drive.google.com/file/d/11A0OUFHMwC4zh32iMndS24iGrEtZQCy5/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1mW3LRtK0TqsjXHgh-0_wbEpyJa9iYIcc","extract_folder_id":"1mW3LRtK0TqsjXHgh-0_wbEpyJa9iYIcc","n_frames":12,"cost":0.0012860999999999999,"gemini_secs":14.31,"candidates":[{"rank":1,"index":8,"timestamp":8.0,"reason":"This frame is sharp, graphics-free, and presents a clear beauty shot of a plated finished dessert, aligning perfectly with the content type rules.","file_id":"1i6HMTcUhnxSw9NK4BaE1PWbktuKtjMAW","drive_link":"https://drive.google.com/file/d/1i6HMTcUhnxSw9NK4BaE1PWbktuKtjMAW/view?usp=drivesdk","local":null},{"rank":2,"index":9,"timestamp":9.0,"reason":"This frame is sharp, graphics-free, and offers a clean overhead view of a completed recipe, fitting the 'beauty moment' and 'clean overhead' preferences.","file_id":"1v_0JwSjPSXnxv_IjrbkTbueSOLfZoraZ","drive_link":"https://drive.google.com/file/d/1v_0JwSjPSXnxv_IjrbkTbueSOLfZoraZ/view?usp=drivesdk","local":null}]}}},{"sfid":"1H-uHbHR2Fc79oBGhn5ThmdhER0egZkWC","year":"2026","title":"TajinTequilaPineapple Final Mus Cap","brand":"Kitchn","project_id":"2602K013","source_file_name":"TajinTequilaPineapple_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1vgqISd33PHOIoD5BGeeeS-iXMUvliKzY","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/11Sxy7a7Yw_iV5x8bG5KYKPcwVkFe633I","extract_folder_id":"11Sxy7a7Yw_iV5x8bG5KYKPcwVkFe633I","n_frames":20,"cost":0.023267500000000003,"gemini_secs":30.56,"candidates":[{"rank":1,"index":2,"timestamp":2.0,"reason":"This is a perfect beauty shot of the finished cocktail, which is the ideal thumbnail for a recipe video. The framing is clean, and the garnish is appealing.","file_id":"1ttDsbCuryaqnUqfh0N8ovIxsbqRPU2_o","drive_link":"https://drive.google.com/file/d/1ttDsbCuryaqnUqfh0N8ovIxsbqRPU2_o/view?usp=drivesdk","local":null},{"rank":2,"index":1,"timestamp":1.0,"reason":"This is a strong hero shot of the seasoned pineapple, a key component of the recipe. The close-up and vibrant colors are visually engaging.","file_id":"1rCKhscp2PiH-1BRs4Lht6qUYp7I8A4rX","drive_link":"https://drive.google.com/file/d/1rCKhscp2PiH-1BRs4Lht6qUYp7I8A4rX/view?usp=drivesdk","local":null},{"rank":3,"index":14,"timestamp":14.0,"reason":"This is a clean, simple hero shot of the garnish against a neutral background. It's visually distinct from the other candidates and highlights an important element of the final dish.","file_id":"1YXrXamOxnyxRKyeV5FvKjX0F-m_dbGSc","drive_link":"https://drive.google.com/file/d/1YXrXamOxnyxRKyeV5FvKjX0F-m_dbGSc/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1z10tamvX-JZuQclTr_a3IbUoFmmyihWo","extract_folder_id":"1z10tamvX-JZuQclTr_a3IbUoFmmyihWo","n_frames":20,"cost":0.0018567,"gemini_secs":25.67,"candidates":[{"rank":1,"index":2,"timestamp":2.0,"reason":"This frame is a perfect beauty shot of the final cocktail, showcasing the completed recipe with the pineapple garnish and salt rim.","file_id":"1H793_I8QY_PpLJMIUn67Sv7bZWWplwLV","drive_link":"https://drive.google.com/file/d/1H793_I8QY_PpLJMIUn67Sv7bZWWplwLV/view?usp=drivesdk","local":null},{"rank":2,"index":1,"timestamp":1.0,"reason":"This frame provides a clear hero shot of the seasoned pineapple chunks on a skewer, representing the prepared food component before it's used as a garnish, without hands in action.","file_id":"1u4BHw158--w4Kas0L25xr478rRg-pEdp","drive_link":"https://drive.google.com/file/d/1u4BHw158--w4Kas0L25xr478rRg-pEdp/view?usp=drivesdk","local":null},{"rank":3,"index":13,"timestamp":13.0,"reason":"This overhead shot of the seasoned pineapple in a bowl serves as a clean 'completed recipe' shot for the pineapple component, showing the texture and seasoning without any hands or mid-action elements.","file_id":"1w0GSBSXxffAErOyxcbNfGkOSbxLT2k38","drive_link":"https://drive.google.com/file/d/1w0GSBSXxffAErOyxcbNfGkOSbxLT2k38/view?usp=drivesdk","local":null}]}}},{"sfid":"104CkhiCguJxk1CEnhecGKI5tbYQbPXWp","year":"2026","title":"TexasChili Final Mus Cap","brand":"Kitchn","project_id":"2601K002","source_file_name":"TexasChili_Final_NoMus_NoCap.mp4","parent_folder_link":"https://drive.google.com/drive/folders/1-v6UMjMHq2_Zw6gjodUKOj5XS_Ax38B2","labels":{"pro":{"extract_folder_link":"https://drive.google.com/drive/folders/1GbLBXJnE3pVsuNwcNWhUVIs49ziYPCX0","extract_folder_id":"1GbLBXJnE3pVsuNwcNWhUVIs49ziYPCX0","n_frames":49,"cost":0.05155625,"gemini_secs":55.37,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This is an excellent beauty shot of the finished dish. It shows the plated chili with toppings and the pot it came from, providing great context and looking very appetizing.","file_id":"1IYb_ECZ2nH36mZkM3Q-Fqh-cBjNqQ0lT","drive_link":"https://drive.google.com/file/d/1IYb_ECZ2nH36mZkM3Q-Fqh-cBjNqQ0lT/view?usp=drivesdk","local":null},{"rank":2,"index":47,"timestamp":47.0,"reason":"A strong, clean shot of the final plated dish with all the toppings. The spoon in the bowl is inviting and the composition is very appealing.","file_id":"132xLwDSl56HNNV0vB9upctQVgYmoyU1b","drive_link":"https://drive.google.com/file/d/132xLwDSl56HNNV0vB9upctQVgYmoyU1b/view?usp=drivesdk","local":null},{"rank":3,"index":1,"timestamp":1.0,"reason":"This is a great hero shot of the chili itself in the pot. It's a clean, simple, and delicious-looking frame that clearly communicates the recipe's final product.","file_id":"1V8r4pzxktobDQE0JWmP_e5UxJWt6JWr8","drive_link":"https://drive.google.com/file/d/1V8r4pzxktobDQE0JWmP_e5UxJWt6JWr8/view?usp=drivesdk","local":null}]},"flash":{"extract_folder_link":"https://drive.google.com/drive/folders/1FZvudn6vgqkzKQ49e9JPtxYrx3mPcwAb","extract_folder_id":"1FZvudn6vgqkzKQ49e9JPtxYrx3mPcwAb","n_frames":49,"cost":0.00433395,"gemini_secs":47.44,"candidates":[{"rank":1,"index":0,"timestamp":0.0,"reason":"This frame presents a wide, clean beauty shot of the finished chili, both in the pot and beautifully plated with all toppings, aligning perfectly with the 'beauty moment' and 'plated finished dish' preference.","file_id":"1L8Tw1gSsntmW-cZzUwHludbtogQMyoWR","drive_link":"https://drive.google.com/file/d/1L8Tw1gSsntmW-cZzUwHludbtogQMyoWR/view?usp=drivesdk","local":null},{"rank":2,"index":47,"timestamp":47.0,"reason":"This frame offers a clear, sharp close-up of the fully plated chili with all its vibrant toppings, serving as an excellent hero shot of the completed recipe from a different angle than the first choice.","file_id":"1QiO_2TJgzRoZB4N2624F9Wur1Gd7m-rh","drive_link":"https://drive.google.com/file/d/1QiO_2TJgzRoZB4N2624F9Wur1Gd7m-rh/view?usp=drivesdk","local":null},{"rank":3,"index":40,"timestamp":40.0,"reason":"This frame provides a sharp, graphics-free shot of the finished chili simmering in the pot, representing a 'hero shot of the final food' before plating, and is from a distinct shot ID.","file_id":"1N0_XGFJvesQKuvKqVW9dQ8lJuibkGUaE","drive_link":"https://drive.google.com/file/d/1N0_XGFJvesQKuvKqVW9dQ8lJuibkGUaE/view?usp=drivesdk","local":null}]}}}];
+window.__QC_LABELS__ = ["pro", "flash"];
+window.__QC_OAUTH_CLIENT_ID__ = "279959204531-0pi7k4cdmtn3c15ea0r070ebqkm20srq.apps.googleusercontent.com";
+</script>
+<script>
+(() => {
+const STATE_KEY = "thumb_qc_state_v2";
+const MAX_UNDO = 200;
+
+const VIDEOS = window.__QC_VIDEOS__;
+const LABELS = window.__QC_LABELS__;
+const IS_AB = LABELS.length >= 2;
+const OAUTH_CLIENT_ID = window.__QC_OAUTH_CLIENT_ID__ || "";
+const OAUTH_ENABLED = !!OAUTH_CLIENT_ID;
+const TOKEN_KEY = "qc_oauth_token";
+const TOKEN_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+
+const labelOrder = (LABELS.includes("pro") && LABELS.includes("flash"))
+  ? ["pro", "flash"].concat(LABELS.filter(l => l !== "pro" && l !== "flash"))
+  : LABELS.slice().sort();
+
+// ─── state ─────────────────────────────────────────────────────────────────
+let state = loadState() || {
+  picks: {},        // sfid → { kind: 'pick'|'either'|'bad'|'skip', label?, rank? }
+  notes: {},        // sfid → string
+  filterStatus: "unreviewed",
+  filterYear: "all",
+  autoAdvance: true,
+};
+let undoStack = [];
+let redoStack = [];
+let focusIdx = 0;
+let saveTimer = null;
+let fileHandle = null;       // FileSystemFileHandle (Chrome/Edge) for live disk save
+let fileSaveTimer = null;
+let lastDiskSave = null;
+const FS_API_OK = "showSaveFilePicker" in window;
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STATE_KEY) || "null"); }
+  catch { return null; }
+}
+function saveStateNow() {
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  setSaveIndicator("saved");
+  scheduleDiskSave();
+}
+function saveStateDebounced() {
+  setSaveIndicator("saving");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveStateNow, 250);
+}
+function setSaveIndicator(k, msg) {
+  const el = document.getElementById("save-ind");
+  if (!el) return;
+  el.className = "save-indicator " + k;
+  el.textContent = msg || (k === "saving" ? "saving…" : "saved");
+}
+function scheduleDiskSave() {
+  if (!fileHandle) return;
+  clearTimeout(fileSaveTimer);
+  fileSaveTimer = setTimeout(writeToDisk, 600);
+}
+async function writeToDisk() {
+  if (!fileHandle) return;
+  try {
+    const writable = await fileHandle.createWritable();
+    await writable.write(buildExportPayload());
+    await writable.close();
+    lastDiskSave = new Date();
+    setSaveIndicator("saved", `saved to disk · ${fileHandle.name}`);
+  } catch (e) {
+    console.error("disk save failed", e);
+    setSaveIndicator("saving", "disk save failed");
+  }
+}
+function buildExportPayload() {
+  const out = { exported_at: new Date().toISOString(), total_videos: VIDEOS.length,
+                labels: LABELS, decisions: {} };
+  for (const v of VIDEOS) {
+    const p = state.picks[v.sfid];
+    const note = state.notes[v.sfid];
+    if (!p && !note) continue;
+    out.decisions[v.sfid] = {
+      title: v.title, brand: v.brand, project_id: v.project_id, year: v.year,
+      pick: p || null, note: note || null,
+    };
+  }
+  return JSON.stringify(out, null, 2);
+}
+async function pickSaveFile() {
+  if (!FS_API_OK) {
+    alert("Save-to-file requires Chrome/Edge. Use Export to download a JSON snapshot instead.");
+    return;
+  }
+  try {
+    fileHandle = await window.showSaveFilePicker({
+      suggestedName: `qc_decisions_${new Date().toISOString().slice(0,10)}.json`,
+      types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+    });
+    document.getElementById("btn-save-file").textContent = `💾 ${fileHandle.name}`;
+    await writeToDisk();
+  } catch (e) {
+    if (e.name !== "AbortError") console.error(e);
+  }
+}
+async function pickLoadFile() {
+  if (!FS_API_OK) {
+    document.getElementById("import-input").click();
+    return;
+  }
+  try {
+    const [h] = await window.showOpenFilePicker({
+      types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+    });
+    const f = await h.getFile();
+    importJSON(await f.text());
+    fileHandle = h;
+    document.getElementById("btn-save-file").textContent = `💾 ${h.name}`;
+  } catch (e) {
+    if (e.name !== "AbortError") console.error(e);
+  }
+}
+function importJSON(text) {
+  let data;
+  try { data = JSON.parse(text); } catch { alert("Not valid JSON"); return; }
+  const decisions = data.decisions || data;  // accept either schema
+  let imported = 0;
+  for (const [sfid, d] of Object.entries(decisions)) {
+    if (d && typeof d === "object") {
+      if (d.pick) state.picks[sfid] = d.pick; else delete state.picks[sfid];
+      if (d.note) state.notes[sfid] = d.note; else delete state.notes[sfid];
+      imported++;
+    } else if (d && d.kind) {
+      state.picks[sfid] = d; imported++;
+    }
+  }
+  saveStateNow();
+  for (const v of VIDEOS) refreshCard(v.sfid);
+  refreshProgress(); applyFilter(); updateUndoButtons();
+  alert(`Imported ${imported} decisions.`);
+}
+
+// ─── undo/redo ─────────────────────────────────────────────────────────────
+function pushUndo(action) {
+  undoStack.push(action);
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoButtons();
+}
+function applyAction(a, reverse) {
+  // a: { sfid, before: pick|null, after: pick|null, beforeNote, afterNote }
+  const target = reverse ? a.before : a.after;
+  const noteTarget = reverse ? a.beforeNote : a.afterNote;
+  if (target == null) delete state.picks[a.sfid]; else state.picks[a.sfid] = target;
+  if (noteTarget == null || noteTarget === "") delete state.notes[a.sfid];
+  else state.notes[a.sfid] = noteTarget;
+  refreshCard(a.sfid);
+  refreshProgress();
+  saveStateDebounced();
+}
+function undo() {
+  const a = undoStack.pop();
+  if (!a) return;
+  applyAction(a, true);
+  redoStack.push(a);
+  updateUndoButtons();
+  scrollCardIntoView(a.sfid);
+}
+function redo() {
+  const a = redoStack.pop();
+  if (!a) return;
+  applyAction(a, false);
+  undoStack.push(a);
+  updateUndoButtons();
+  scrollCardIntoView(a.sfid);
+}
+function updateUndoButtons() {
+  const u = document.getElementById("btn-undo");
+  const r = document.getElementById("btn-redo");
+  if (u) u.disabled = undoStack.length === 0;
+  if (r) r.disabled = redoStack.length === 0;
+}
+
+// ─── pick mutations ────────────────────────────────────────────────────────
+function setPick(sfid, newPick, opts = {}) {
+  const before = state.picks[sfid] ? JSON.parse(JSON.stringify(state.picks[sfid])) : null;
+  const beforeNote = state.notes[sfid] || "";
+  const afterNote = beforeNote;
+  if (newPick == null) delete state.picks[sfid]; else state.picks[sfid] = newPick;
+  if (!opts.noUndo) {
+    pushUndo({ sfid, before, after: newPick, beforeNote, afterNote });
+  }
+  refreshCard(sfid);
+  refreshProgress();
+  rebuildJumpList();  // status changed → reflect in sidebar
+  // also re-apply filter so a just-picked card hides under "unreviewed"
+  applyFilter({ keepFocusOn: sfid });
+  saveStateDebounced();
+  if (state.autoAdvance && newPick && opts.advance !== false) {
+    setTimeout(() => focusNextAfterPick(sfid), 220);
+  }
+}
+function setNote(sfid, note) {
+  const beforeNote = state.notes[sfid] || "";
+  if (note === beforeNote) return;
+  if (!note) delete state.notes[sfid]; else state.notes[sfid] = note;
+  saveStateDebounced();
+}
+
+// ─── filtering & focus ─────────────────────────────────────────────────────
+function videoMatches(v) {
+  if (state.filterYear !== "all" && v.year !== state.filterYear) return false;
+  const p = state.picks[v.sfid];
+  switch (state.filterStatus) {
+    case "all": return true;
+    case "unreviewed": return !p;
+    case "picked": return !!p && p.kind !== "skip";
+    case "skipped": return !!p && p.kind === "skip";
+    case "bad": return !!p && p.kind === "bad";
+    default: return true;
+  }
+}
+function visibleVideos() { return VIDEOS.filter(videoMatches); }
+
+function applyFilter(opts = {}) {
+  for (const card of document.querySelectorAll(".card")) {
+    const sfid = card.dataset.sfid;
+    const v = VIDEOS.find(x => x.sfid === sfid);
+    card.dataset.hidden = videoMatches(v) ? "false" : "true";
+  }
+  if (opts.keepFocusOn) {
+    // don't change focus; user is in the middle of an action
+    refreshProgress();
+    return;
+  }
+  const vis = visibleVideos();
+  focusIdx = 0;
+  if (vis.length) scrollCardIntoView(vis[0].sfid);
+  refreshProgress();
+}
+
+function focusOnSfid(sfid) {
+  const vis = visibleVideos();
+  const idx = vis.findIndex(v => v.sfid === sfid);
+  if (idx >= 0) {
+    focusIdx = idx;
+    scrollCardIntoView(sfid);
+    return true;
+  }
+  return false;
+}
+
+// Sfid-based "go to next video after THIS one" — robust against filter changes,
+// because we walk the FULL VIDEOS array from the just-acted card's position.
+function focusNextAfterPick(currentSfid) {
+  const fullIdx = VIDEOS.findIndex(v => v.sfid === currentSfid);
+  if (fullIdx === -1) { focusNext(true); return; }
+  for (let i = fullIdx + 1; i < VIDEOS.length; i++) {
+    if (videoMatches(VIDEOS[i])) { focusOnSfid(VIDEOS[i].sfid); return; }
+  }
+  // wrap around
+  for (let i = 0; i < fullIdx; i++) {
+    if (videoMatches(VIDEOS[i])) { focusOnSfid(VIDEOS[i].sfid); return; }
+  }
+  // nothing visible left — leave focus where it is
+}
+
+function focusNext(skipReviewed) {
+  const vis = visibleVideos();
+  if (!vis.length) return;
+  for (let i = 1; i <= vis.length; i++) {
+    const idx = (focusIdx + i) % vis.length;
+    if (skipReviewed && state.picks[vis[idx].sfid]) continue;
+    focusIdx = idx;
+    scrollCardIntoView(vis[idx].sfid);
+    return;
+  }
+  focusIdx = (focusIdx + 1) % vis.length;
+  scrollCardIntoView(vis[focusIdx].sfid);
+}
+function focusPrev() {
+  const vis = visibleVideos();
+  if (!vis.length) return;
+  focusIdx = (focusIdx - 1 + vis.length) % vis.length;
+  scrollCardIntoView(vis[focusIdx].sfid);
+}
+function scrollCardIntoView(sfid) {
+  const el = document.querySelector(`.card[data-sfid="${cssEscape(sfid)}"]`);
+  if (!el) return;
+  document.querySelectorAll(".card.focused").forEach(c => c.classList.remove("focused"));
+  el.classList.add("focused");
+  // Custom scroll: place card top ~140px below viewport top (clears the sticky bar).
+  const rect = el.getBoundingClientRect();
+  const targetY = window.scrollY + rect.top - 140;
+  window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
+  // sync the jump-list highlight
+  document.querySelectorAll(".jump-item.active").forEach(j => j.classList.remove("active"));
+  document.querySelector(`.jump-item[data-sfid="${cssEscape(sfid)}"]`)?.classList.add("active");
+  document.querySelector(`.jump-item[data-sfid="${cssEscape(sfid)}"]`)?.scrollIntoView({block: "nearest"});
+}
+function cssEscape(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/"/g, '\\"'); }
+
+// ─── render helpers ────────────────────────────────────────────────────────
+function refreshCard(sfid) {
+  const card = document.querySelector(`.card[data-sfid="${cssEscape(sfid)}"]`);
+  if (!card) return;
+  const p = state.picks[sfid];
+  card.classList.toggle("picked", !!p && p.kind === "pick");
+  card.classList.toggle("skipped", !!p && p.kind === "skip");
+  card.classList.toggle("bad", !!p && p.kind === "bad");
+  // candidate highlights
+  for (const c of card.querySelectorAll(".cand")) {
+    const lbl = c.dataset.label;
+    const rank = parseInt(c.dataset.rank);
+    const isPicked = p && p.kind === "pick" && p.label === lbl && p.rank === rank;
+    c.classList.toggle("picked", !!isPicked);
+  }
+  // verdict buttons
+  for (const b of card.querySelectorAll(".verdict-btn")) {
+    const k = b.dataset.kind;
+    if (k === "either") b.classList.toggle("active", !!p && p.kind === "either");
+    else if (k === "bad") b.classList.toggle("active", !!p && p.kind === "bad");
+    else if (k === "skip") b.classList.toggle("active", !!p && p.kind === "skip");
+  }
+  // status pill
+  const pill = card.querySelector(".pick-status");
+  if (pill) {
+    pill.classList.remove("picked", "skipped", "bad");
+    if (!p) { pill.textContent = "unreviewed"; }
+    else if (p.kind === "pick") {
+      pill.classList.add("picked");
+      pill.textContent = `✓ ${p.label} #${p.rank}`;
+    } else if (p.kind === "either") {
+      pill.classList.add("picked");
+      pill.textContent = "✓ either";
+    } else if (p.kind === "bad") {
+      pill.classList.add("bad"); pill.textContent = "✕ both bad";
+    } else if (p.kind === "skip") {
+      pill.classList.add("skipped"); pill.textContent = "↪ skipped";
+    }
+  }
+}
+
+function refreshProgress() {
+  const total = VIDEOS.length;
+  const reviewed = Object.keys(state.picks).length;
+  const picked = Object.values(state.picks).filter(p => p.kind === "pick" || p.kind === "either").length;
+  const skipped = Object.values(state.picks).filter(p => p.kind === "skip").length;
+  const bad = Object.values(state.picks).filter(p => p.kind === "bad").length;
+  const pct = total ? (reviewed / total * 100) : 0;
+  document.getElementById("progress-fill").style.width = pct.toFixed(1) + "%";
+  document.getElementById("progress-text").innerHTML =
+    `<b>${reviewed}</b> / ${total} reviewed · <b>${picked}</b> picked · ${skipped} skipped · ${bad} bad`;
+
+  // year tab counts
+  for (const tab of document.querySelectorAll(".tab-year")) {
+    const yr = tab.dataset.year;
+    const subset = (yr === "all") ? VIDEOS : VIDEOS.filter(v => v.year === yr);
+    const done = subset.filter(v => state.picks[v.sfid]).length;
+    const cnt = tab.querySelector(".count");
+    if (cnt) cnt.textContent = `${subset.length}·${done}✓`;
+  }
+}
+
+// ─── jump list (sidebar) ───────────────────────────────────────────────────
+function buildJumpList() {
+  const list = document.getElementById("jumplist");
+  list.innerHTML = "";
+  for (const v of VIDEOS) {
+    const item = document.createElement("div");
+    item.className = "jump-item";
+    item.dataset.sfid = v.sfid;
+    item.dataset.searchKey = ((v.title||"") + " " + (v.project_id||"") + " " + (v.brand||"")).toLowerCase();
+    item.innerHTML = `<span class="dot"></span><span class="title"></span><span class="yr">${v.year}</span>`;
+    item.querySelector(".title").textContent = v.title;
+    item.addEventListener("click", () => focusOnSfid(v.sfid));
+    list.appendChild(item);
+  }
+  rebuildJumpList();
+}
+function rebuildJumpList() {
+  for (const item of document.querySelectorAll(".jump-item")) {
+    const sfid = item.dataset.sfid;
+    const p = state.picks[sfid];
+    item.classList.remove("s-picked", "s-skipped", "s-bad", "s-either");
+    if (p?.kind === "pick") item.classList.add("s-picked");
+    else if (p?.kind === "either") item.classList.add("s-either");
+    else if (p?.kind === "skip") item.classList.add("s-skipped");
+    else if (p?.kind === "bad") item.classList.add("s-bad");
+  }
+}
+function wireJumpListSearch() {
+  const input = document.getElementById("jumprail-search");
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    for (const item of document.querySelectorAll(".jump-item")) {
+      item.classList.toggle("hidden", q && !item.dataset.searchKey.includes(q));
+    }
+  });
+  // don't intercept keys when search has focus
+  input.addEventListener("focus", () => { window.__noteFocused = true; });
+  input.addEventListener("blur",  () => { window.__noteFocused = false; });
+  document.getElementById("jumprail-toggle").addEventListener("click", () => {
+    document.getElementById("jumprail").classList.toggle("collapsed");
+  });
+}
+
+// ─── thumb URL fallbacks (used when OAuth isn't enabled) ──────────────────
+function thumbUrl(fileId) {
+  if (!fileId) return null;
+  return `https://lh3.googleusercontent.com/d/${fileId}=w600`;
+}
+function fallbackThumbUrl(fileId) {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w600`;
+}
+
+// ─── OAuth + Drive API thumb fetching ─────────────────────────────────────
+let accessToken = null;
+let tokenExpiry = 0;
+let tokenClient = null;
+let driveBlobCache = new Map();      // fileId → object URL
+let pendingThumbImgs = new Map();    // fileId → [imgEl, ...] (queued before sign-in)
+let thumbObserver = null;            // IntersectionObserver
+
+function loadStoredToken() {
+  try {
+    const t = JSON.parse(localStorage.getItem(TOKEN_KEY) || "null");
+    if (t && t.access_token && t.expiry > Date.now() + 30_000) {
+      accessToken = t.access_token;
+      tokenExpiry = t.expiry;
+      return true;
+    }
+  } catch {}
+  return false;
+}
+function persistToken(token, expires_in_secs) {
+  accessToken = token;
+  tokenExpiry = Date.now() + (expires_in_secs - 30) * 1000;
+  localStorage.setItem(TOKEN_KEY, JSON.stringify({access_token: token, expiry: tokenExpiry}));
+}
+function showSigninUI(state) {
+  const btn = document.getElementById("btn-signin");
+  const stat = document.getElementById("signin-status");
+  if (!btn) return;
+  if (state === "needed") {
+    btn.style.display = "";
+    stat.style.display = "none";
+  } else if (state === "signed-in") {
+    btn.style.display = "none";
+    stat.style.display = "";
+    stat.textContent = "✓ signed in";
+    stat.className = "save-indicator saved";
+  } else if (state === "loading") {
+    btn.style.display = "none";
+    stat.style.display = "";
+    stat.textContent = "loading thumbs…";
+    stat.className = "save-indicator saving";
+  }
+}
+
+function initTokenClient() {
+  if (!OAUTH_ENABLED) return;
+  if (typeof google === "undefined" || !google.accounts?.oauth2) {
+    // GSI library not yet loaded — retry shortly
+    setTimeout(initTokenClient, 200);
+    return;
+  }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: OAUTH_CLIENT_ID,
+    scope: TOKEN_DRIVE_SCOPE,
+    callback: (resp) => {
+      if (resp.error) {
+        console.error("oauth error", resp);
+        showSigninUI("needed");
+        return;
+      }
+      persistToken(resp.access_token, resp.expires_in || 3600);
+      showSigninUI("signed-in");
+      flushPendingThumbs();
+    },
+  });
+  // Try silent re-auth first
+  if (loadStoredToken()) {
+    showSigninUI("signed-in");
+    flushPendingThumbs();
+  } else {
+    // Silent prompt — only succeeds if Google session has the consent
+    try { tokenClient.requestAccessToken({prompt: ""}); } catch {}
+    // If silent fails, the callback won't fire for ~1s; show button as fallback
+    setTimeout(() => { if (!accessToken) showSigninUI("needed"); }, 1500);
+  }
+  document.getElementById("btn-signin").addEventListener("click", () => {
+    showSigninUI("loading");
+    tokenClient.requestAccessToken({prompt: "select_account"});
+  });
+}
+
+async function ensureToken() {
+  if (accessToken && tokenExpiry > Date.now() + 30_000) return accessToken;
+  loadStoredToken();
+  if (accessToken && tokenExpiry > Date.now() + 30_000) return accessToken;
+  // request silently; user has clicked sign-in already if we got here
+  return new Promise((resolve, reject) => {
+    if (!tokenClient) return reject("no token client");
+    const orig = tokenClient.callback;
+    tokenClient.callback = (resp) => {
+      orig(resp);
+      if (resp.error) reject(resp); else resolve(resp.access_token);
+    };
+    tokenClient.requestAccessToken({prompt: ""});
+  });
+}
+
+async function fetchThumbBlob(fileId) {
+  if (driveBlobCache.has(fileId)) return driveBlobCache.get(fileId);
+  const token = await ensureToken();
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`;
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(`drive ${r.status}`);
+  const blob = await r.blob();
+  const obj = URL.createObjectURL(blob);
+  driveBlobCache.set(fileId, obj);
+  return obj;
+}
+
+function queuePendingThumb(fileId, imgEl) {
+  if (!pendingThumbImgs.has(fileId)) pendingThumbImgs.set(fileId, []);
+  pendingThumbImgs.get(fileId).push(imgEl);
+}
+
+async function flushPendingThumbs() {
+  // Fire all queued lazy-fetches that have already intersected.
+  // (We don't auto-load every thumb upfront — only those that became visible.)
+  const all = Array.from(pendingThumbImgs.entries());
+  pendingThumbImgs.clear();
+  // Process with bounded concurrency so we don't hammer Drive.
+  const QUEUE = all.slice();
+  const WORKERS = 6;
+  async function worker() {
+    while (QUEUE.length) {
+      const [fid, imgs] = QUEUE.shift();
+      try {
+        const obj = await fetchThumbBlob(fid);
+        for (const im of imgs) im.src = obj;
+      } catch (e) {
+        for (const im of imgs) {
+          const wrap = im.parentElement;
+          if (wrap) wrap.innerHTML = '<div class="ph">no preview · click ↗ to view</div>';
+        }
+      }
+    }
+  }
+  await Promise.all(Array.from({length: WORKERS}, worker));
+}
+
+function ensureThumbObserver() {
+  if (thumbObserver) return thumbObserver;
+  thumbObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const img = e.target;
+      const fid = img.dataset.fileid;
+      thumbObserver.unobserve(img);
+      if (driveBlobCache.has(fid)) {
+        img.src = driveBlobCache.get(fid);
+      } else {
+        queuePendingThumb(fid, img);
+        if (accessToken) flushPendingThumbs();
+      }
+    }
+  }, { rootMargin: "400px 0px" });
+  return thumbObserver;
+}
+
+// ─── card rendering ────────────────────────────────────────────────────────
+function buildCard(v) {
+  const card = document.createElement("section");
+  card.className = "card";
+  card.dataset.sfid = v.sfid;
+  card.dataset.year = v.year;
+  card.addEventListener("click", (e) => {
+    // Don't override more specific click handlers (cands, buttons, links, inputs).
+    if (e.target.closest(".cand,a,button,input")) return;
+    focusOnSfid(v.sfid);
+  });
+
+  const head = document.createElement("div");
+  head.className = "card-head";
+  const h2 = document.createElement("h2");
+  h2.textContent = v.title;
+  head.appendChild(h2);
+  const yrTag = mkTag(v.year, "tag");
+  head.appendChild(yrTag);
+  if (v.brand) head.appendChild(mkTag(v.brand, `tag brand-${esc(v.brand)}`));
+  if (v.project_id) head.appendChild(mkTag(v.project_id, "tag tag-mono"));
+  if (v.source_file_name) head.appendChild(mkTag(v.source_file_name, "tag tag-mono"));
+  const pill = document.createElement("span");
+  pill.className = "pick-status"; pill.textContent = "unreviewed";
+  head.appendChild(pill);
+  card.appendChild(head);
+
+  for (const lbl of labelOrder) {
+    if (!v.labels[lbl]) continue;
+    card.appendChild(buildLabelRow(v, lbl));
+  }
+  card.appendChild(buildVerdictRow(v));
+  return card;
+}
+function mkTag(text, cls) {
+  const s = document.createElement("span"); s.className = cls; s.textContent = text;
+  return s;
+}
+function esc(s) { return String(s).replace(/[^a-zA-Z0-9_-]/g, ""); }
+
+function buildLabelRow(v, lbl) {
+  const data = v.labels[lbl];
+  const row = document.createElement("div");
+  row.className = "label-row";
+  const side = document.createElement("div");
+  side.className = "label-side";
+  const lname = document.createElement("div");
+  lname.className = `label-name ${esc(lbl)}`;
+  lname.textContent = lbl;
+  side.appendChild(lname);
+  const meta = document.createElement("div");
+  meta.className = "label-meta";
+  meta.textContent = `$${data.cost.toFixed(4)} · ${data.gemini_secs.toFixed(0)}s · ${data.n_frames}f`;
+  side.appendChild(meta);
+  if (data.extract_folder_link) {
+    const a = document.createElement("a");
+    a.className = "label-link"; a.href = data.extract_folder_link; a.target = "_blank";
+    a.rel = "noopener"; a.textContent = "folder ↗";
+    side.appendChild(a);
+  }
+  row.appendChild(side);
+
+  const cands = document.createElement("div");
+  cands.className = "cands";
+  data.candidates.forEach((c, i) => cands.appendChild(buildCand(v, lbl, c, i)));
+  row.appendChild(cands);
+  return row;
+}
+
+function buildCand(v, lbl, c, idx) {
+  const el = document.createElement("div");
+  el.className = "cand";
+  el.dataset.label = lbl;
+  el.dataset.rank = c.rank;
+  el.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    setPick(v.sfid, { kind: "pick", label: lbl, rank: c.rank });
+  });
+  const wrap = document.createElement("div");
+  wrap.className = "cand-img-wrap";
+  if (c.local || c.file_id) {
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.alt = `${lbl} rank ${c.rank}`;
+
+    if (c.local) {
+      // Local-bundle path: use the downloaded JPG directly.
+      img.src = c.local;
+      img.onerror = () => {
+        wrap.innerHTML = '<div class="ph">no preview · click ↗ to view</div>';
+      };
+    } else if (OAUTH_ENABLED && c.file_id) {
+      // OAuth path: lazy-fetch via Drive API once card scrolls into view.
+      img.dataset.fileid = c.file_id;
+      // 1×1 transparent placeholder so the layout doesn't jump
+      img.src = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+      ensureThumbObserver().observe(img);
+    } else if (c.file_id) {
+      // No OAuth, no local — try Drive CDN (likely fails for SA-owned files,
+      // but harmless to attempt).
+      const sources = [thumbUrl(c.file_id), fallbackThumbUrl(c.file_id)];
+      let i = 0;
+      img.src = sources[0];
+      img.onerror = () => {
+        i++;
+        if (i < sources.length) img.src = sources[i];
+        else wrap.innerHTML = '<div class="ph">no preview · click ↗ to view</div>';
+      };
+    }
+    wrap.appendChild(img);
+  } else {
+    wrap.innerHTML = '<div class="ph">no preview</div>';
+  }
+  const rank = document.createElement("div");
+  rank.className = "cand-rank"; rank.textContent = `#${c.rank}`;
+  wrap.appendChild(rank);
+  // keyboard hint badge
+  const k = (lbl === "pro" || labelOrder.indexOf(lbl) === 0) ? c.rank : c.rank + 3;
+  if (IS_AB) {
+    const kk = document.createElement("div");
+    kk.className = "cand-key"; kk.textContent = String(k);
+    wrap.appendChild(kk);
+  } else {
+    const kk = document.createElement("div");
+    kk.className = "cand-key"; kk.textContent = String(c.rank);
+    wrap.appendChild(kk);
+  }
+  if (c.drive_link) {
+    const z = document.createElement("a");
+    z.className = "cand-zoom"; z.href = c.drive_link; z.target = "_blank";
+    z.rel = "noopener"; z.title = "Open original in Drive"; z.textContent = "↗";
+    z.addEventListener("click", e => e.stopPropagation());
+    wrap.appendChild(z);
+  }
+  el.appendChild(wrap);
+
+  if (c.timestamp != null && c.index != null) {
+    const meta = document.createElement("div");
+    meta.className = "cand-meta";
+    meta.textContent = `t=${c.timestamp}s · idx=${c.index}`;
+    el.appendChild(meta);
+  }
+  if (c.reason) {
+    const r = document.createElement("div");
+    r.className = "cand-reason"; r.textContent = c.reason; r.title = c.reason;
+    el.appendChild(r);
+  }
+  return el;
+}
+
+function buildVerdictRow(v) {
+  const row = document.createElement("div");
+  row.className = "verdict-row";
+  if (IS_AB) {
+    const eb = mkVerdictBtn("either", "Either", "q");
+    eb.addEventListener("click", () => setPick(v.sfid, { kind: "either" }));
+    row.appendChild(eb);
+  }
+  const bb = mkVerdictBtn("bad", "Both bad", IS_AB ? "w" : "w", "bad");
+  bb.addEventListener("click", () => setPick(v.sfid, { kind: "bad" }));
+  row.appendChild(bb);
+  const sb = mkVerdictBtn("skip", "Skip", "e", "skip");
+  sb.addEventListener("click", () => setPick(v.sfid, { kind: "skip" }));
+  row.appendChild(sb);
+  const reset = document.createElement("button");
+  reset.className = "verdict-btn"; reset.textContent = "Reset";
+  reset.addEventListener("click", () => setPick(v.sfid, null));
+  row.appendChild(reset);
+
+  const note = document.createElement("input");
+  note.type = "text"; note.placeholder = "note (optional)";
+  note.className = "verdict-note"; note.value = state.notes[v.sfid] || "";
+  note.addEventListener("input", () => setNote(v.sfid, note.value));
+  note.addEventListener("focus", () => { window.__noteFocused = true; });
+  note.addEventListener("blur", () => { window.__noteFocused = false; });
+  row.appendChild(note);
+  return row;
+}
+function mkVerdictBtn(kind, label, key, extra = "") {
+  const b = document.createElement("button");
+  b.className = `verdict-btn ${extra}`;
+  b.dataset.kind = kind;
+  b.innerHTML = `<span>${label}</span> <span class="kbd">${key}</span>`;
+  return b;
+}
+
+// ─── tabs / filters ────────────────────────────────────────────────────────
+function buildTabs() {
+  const years = Array.from(new Set(VIDEOS.map(v => v.year))).sort((a, b) => {
+    if (a === "Unknown") return 1; if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
+  const row = document.getElementById("tabs-row");
+  row.appendChild(mkTab("all", "All"));
+  for (const yr of years) row.appendChild(mkTab(yr, yr));
+  row.querySelector(`[data-year="${state.filterYear}"]`)?.classList.add("active");
+}
+function mkTab(yr, label) {
+  const t = document.createElement("button");
+  t.className = "tab tab-year";
+  t.dataset.year = yr;
+  t.innerHTML = `${label}<span class="count"></span>`;
+  t.addEventListener("click", () => {
+    state.filterYear = yr;
+    document.querySelectorAll(".tab-year").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    saveStateDebounced();
+    applyFilter();
+  });
+  return t;
+}
+function buildFilters() {
+  const row = document.getElementById("filter-row");
+  const opts = [
+    ["unreviewed", "Unreviewed"],
+    ["picked", "Picked"],
+    ["skipped", "Skipped"],
+    ["bad", "Bad"],
+    ["all", "All"],
+  ];
+  for (const [k, lbl] of opts) {
+    const b = document.createElement("button");
+    b.className = "tab tab-status"; b.dataset.status = k; b.textContent = lbl;
+    if (state.filterStatus === k) b.classList.add("active");
+    b.addEventListener("click", () => {
+      state.filterStatus = k;
+      document.querySelectorAll(".tab-status").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      saveStateDebounced();
+      applyFilter();
+    });
+    row.appendChild(b);
+  }
+}
+
+// ─── keyboard ──────────────────────────────────────────────────────────────
+function keyHandler(e) {
+  if (window.__noteFocused) return;
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  const vis = visibleVideos();
+  if (!vis.length) return;
+  const v = vis[focusIdx] || vis[0];
+
+  const k = e.key;
+  if (k === "z" && e.shiftKey) { e.preventDefault(); redo(); return; }
+  if (k === "Z") { e.preventDefault(); redo(); return; }
+  if (k === "z") { e.preventDefault(); undo(); return; }
+  if (k === "?") { e.preventDefault(); document.getElementById("help").classList.toggle("show"); return; }
+  if (k === "Escape") { document.getElementById("help").classList.remove("show"); return; }
+  if (k === "j" || k === "ArrowDown") { e.preventDefault(); focusIdx = Math.min(focusIdx + 1, vis.length - 1); scrollCardIntoView(vis[focusIdx].sfid); return; }
+  if (k === "k" || k === "ArrowUp") { e.preventDefault(); focusPrev(); return; }
+  if (k === "n") { e.preventDefault(); focusNext(true); return; }
+  if (k === "/") { e.preventDefault(); document.getElementById("jumprail-search").focus(); return; }
+
+  if (!v) return;
+
+  if (IS_AB) {
+    const top = labelOrder[0], bot = labelOrder[1];
+    if (k === "1" || k === "2" || k === "3") {
+      e.preventDefault(); setPick(v.sfid, { kind: "pick", label: top, rank: parseInt(k) }); return;
+    }
+    if (k === "4" || k === "5" || k === "6") {
+      e.preventDefault(); setPick(v.sfid, { kind: "pick", label: bot, rank: parseInt(k) - 3 }); return;
+    }
+    if (k === "q") { e.preventDefault(); setPick(v.sfid, { kind: "either" }); return; }
+  } else {
+    const lbl = labelOrder[0];
+    if (k === "1" || k === "2" || k === "3") {
+      e.preventDefault(); setPick(v.sfid, { kind: "pick", label: lbl, rank: parseInt(k) }); return;
+    }
+  }
+  if (k === "w") { e.preventDefault(); setPick(v.sfid, { kind: "bad" }); return; }
+  if (k === "e" || k === "s") { e.preventDefault(); setPick(v.sfid, { kind: "skip" }); return; }
+  if (k === "r") { e.preventDefault(); setPick(v.sfid, null); return; }
+}
+
+// ─── export ────────────────────────────────────────────────────────────────
+function exportDecisions() {
+  const blob = new Blob([buildExportPayload()], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `qc_decisions_${Date.now()}.json`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── boot ──────────────────────────────────────────────────────────────────
+function boot() {
+  const main = document.getElementById("cards");
+  for (const v of VIDEOS) main.appendChild(buildCard(v));
+  buildTabs();
+  buildFilters();
+  buildJumpList();
+  wireJumpListSearch();
+  for (const v of VIDEOS) refreshCard(v.sfid);
+  applyFilter();
+  refreshProgress();
+  updateUndoButtons();
+  setSaveIndicator("saved");
+
+  document.getElementById("btn-export").addEventListener("click", exportDecisions);
+  document.getElementById("btn-save-file").addEventListener("click", pickSaveFile);
+  document.getElementById("btn-load-file").addEventListener("click", pickLoadFile);
+  document.getElementById("import-input").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    importJSON(await f.text());
+    e.target.value = "";
+  });
+  document.getElementById("btn-undo").addEventListener("click", undo);
+  document.getElementById("btn-redo").addEventListener("click", redo);
+  if (!FS_API_OK) {
+    document.getElementById("btn-save-file").title =
+      "Save-to-file requires Chrome/Edge. Use Export instead for one-off snapshots.";
+  }
+  document.getElementById("btn-help").addEventListener("click", () => {
+    document.getElementById("help").classList.toggle("show");
+  });
+  document.getElementById("btn-clear").addEventListener("click", () => {
+    if (!confirm("Clear ALL picks and notes? This cannot be undone after closing the page.")) return;
+    state.picks = {}; state.notes = {}; undoStack = []; redoStack = [];
+    saveStateNow();
+    for (const v of VIDEOS) refreshCard(v.sfid);
+    refreshProgress(); applyFilter(); updateUndoButtons();
+  });
+  document.getElementById("btn-resume").addEventListener("click", () => {
+    const next = VIDEOS.findIndex(v => !state.picks[v.sfid] && videoMatches(v));
+    if (next >= 0) { focusIdx = visibleVideos().findIndex(v => v.sfid === VIDEOS[next].sfid); scrollCardIntoView(VIDEOS[next].sfid); }
+  });
+  document.getElementById("auto-advance").checked = state.autoAdvance;
+  document.getElementById("auto-advance").addEventListener("change", e => {
+    state.autoAdvance = e.target.checked; saveStateDebounced();
+  });
+
+  document.addEventListener("keydown", keyHandler);
+  document.getElementById("help").addEventListener("click", e => {
+    if (e.target.id === "help") e.target.classList.remove("show");
+  });
+
+  window.addEventListener("beforeunload", saveStateNow);
+
+  if (OAUTH_ENABLED) initTokenClient();
+}
+document.addEventListener("DOMContentLoaded", boot);
+})();
+</script>
+</body>
+</html>
