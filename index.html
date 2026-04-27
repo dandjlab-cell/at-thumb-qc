@@ -274,6 +274,24 @@ main { padding: 22px 22px 120px; max-width: 1100px; margin: 0 0 0 290px; }
   font-variation-settings: "opsz" 36, "SOFT" 50;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 200px;
 }
+.card-head h2 .title-link {
+  color: inherit; text-decoration: none;
+  border-bottom: 1px solid transparent; transition: border-color 0.15s, color 0.15s;
+}
+.card-head h2 .title-link:hover {
+  color: var(--periwinkle-d);
+  border-bottom-color: var(--periwinkle-d);
+}
+.head-folder-link {
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
+  color: var(--ink-2); text-decoration: none;
+  border: 1px solid var(--rule-strong); padding: 3px 9px; border-radius: 0;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.head-folder-link:hover {
+  background: var(--periwinkle); color: var(--ink); border-color: var(--periwinkle-d);
+}
 .tag {
   background: transparent; padding: 2px 0; border-radius: 0;
   color: var(--ink-2); font-size: 10.5px; font-weight: 500;
@@ -1246,13 +1264,32 @@ function buildCard(v) {
   const head = document.createElement("div");
   head.className = "card-head";
   const h2 = document.createElement("h2");
-  h2.textContent = v.title;
+  if (v.parent_folder_link) {
+    const a = document.createElement("a");
+    a.href = v.parent_folder_link; a.target = "_blank"; a.rel = "noopener";
+    a.className = "title-link";
+    a.textContent = v.title;
+    a.title = "Open this video's Drive folder";
+    a.addEventListener("click", e => e.stopPropagation());
+    h2.appendChild(a);
+  } else {
+    h2.textContent = v.title;
+  }
   head.appendChild(h2);
   const yrTag = mkTag(v.year, "tag");
   head.appendChild(yrTag);
   if (v.brand) head.appendChild(mkTag(v.brand, `tag brand-${esc(v.brand)}`));
   if (v.project_id) head.appendChild(mkTag(v.project_id, "tag tag-mono"));
   if (v.source_file_name) head.appendChild(mkTag(v.source_file_name, "tag tag-mono"));
+  if (v.parent_folder_link) {
+    const fl = document.createElement("a");
+    fl.href = v.parent_folder_link; fl.target = "_blank"; fl.rel = "noopener";
+    fl.className = "head-folder-link";
+    fl.textContent = "↗ Drive folder";
+    fl.title = "Open the parent folder for this video on Drive";
+    fl.addEventListener("click", e => e.stopPropagation());
+    head.appendChild(fl);
+  }
   const pill = document.createElement("span");
   pill.className = "pick-status"; pill.textContent = "unreviewed";
   head.appendChild(pill);
