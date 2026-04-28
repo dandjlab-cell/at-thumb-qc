@@ -286,9 +286,36 @@ main { padding: 22px 22px 120px; max-width: 1100px; margin: 0 0 0 290px; }
 }
 .card[data-hidden="true"] { display: none; }
 
-/* Inline pill — quieter than a banner, since "no clean source" is the norm
-   for this batch (~96%). Use the metadata row, not a full-width banner. */
+/* Header warning pills — surface only what the reviewer needs to ACT on.
+   Long-form Gemini reasoning is hidden behind tooltips (cursor: help) so it's
+   available without cluttering the card. */
+.tag.tag-warn {
+  background: #FCEFEC;
+  color: var(--terracotta);
+  border: 1px solid var(--terracotta);
+  padding: 1.5px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: help;
+}
+.tag.tag-warn::before { content: "⚠ "; }
 .tag.tag-no-clean {
+  background: #FCEFEC;
+  color: var(--terracotta);
+  border: 1px solid var(--terracotta);
+  padding: 1.5px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  cursor: help;
+}
+.tag.tag-no-clean::before { content: "⚠ "; }
+.tag.tag-reclass {
   background: var(--paper);
   color: var(--ink-2);
   border: 1px dashed var(--rule-strong);
@@ -298,12 +325,9 @@ main { padding: 22px 22px 120px; max-width: 1100px; margin: 0 0 0 290px; }
   font-size: 10.5px;
   font-weight: 500;
   font-family: 'Inter', sans-serif;
+  cursor: help;
 }
-.tag.tag-no-clean::before {
-  content: "⚠ ";
-  color: var(--gold-d);
-  font-weight: 400;
-}
+.tag.tag-reclass::before { content: "🔄 "; }
 
 .card-head {
   display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px;
@@ -1597,9 +1621,45 @@ function buildCard(v) {
   if (v.project_id) head.appendChild(mkTag(v.project_id, "tag tag-mono"));
   if (v.source_file_name) head.appendChild(mkTag(v.source_file_name, "tag tag-mono"));
   if (v.clean_available === false) {
-    const pill = mkTag("no-cap master not available", "tag tag-no-clean");
-    pill.title = "Pipeline didn't find a no-caption variant in Drive — picks may include text overlay";
+    const pill = mkTag("NO CLEAN CUT", "tag tag-no-clean");
+    pill.title = "Pipeline didn't find a no-caption / no-music variant in Drive — picks may include burned-in text or music interference";
     head.appendChild(pill);
+  }
+  // Surface concrete warnings detected in Gemini's commentary as compact pills.
+  // Full prose stays available via tooltip (cursor: help on the pill).
+  for (const lbl of labelOrder) {
+    const data = v.labels[lbl];
+    if (!data) continue;
+    const detected = data.detected_content_type;
+    const suspected = data.content_type;
+    if (detected && suspected && detected !== suspected) {
+      const reasoning = (data.content_type_reasoning || "").trim();
+      const pill = mkTag(`RECLASSIFIED → ${detected}`, "tag tag-reclass");
+      pill.title = reasoning ? `${lbl.toUpperCase()}: was ${suspected}, now ${detected}\n\n${reasoning}`
+                             : `${lbl.toUpperCase()}: was ${suspected}, now ${detected}`;
+      head.appendChild(pill);
+    }
+    const notes = (data.gemini_notes || "").trim();
+    if (notes) {
+      const lower = notes.toLowerCase();
+      // Pattern-match the editorially actionable signals.
+      const warns = [];
+      const onlyN = lower.match(/only\s+(?:one|1|2|3|4|5|6|7|8|9|10|\d+)\s+frame/);
+      if (onlyN) warns.push("ONLY 1-FEW ELIGIBLE FRAMES");
+      if (/no\s+frame\s+(?:satisfies|meets|matches|met|qualifies)/i.test(notes)) warns.push("NO ELIGIBLE FRAME");
+      if (/(all\s+\d*\s*frames?\s+(?:had|have|contain)|every\s+frame\s+has)/i.test(notes)) {
+        if (/text\s*(?:overlay|overlays|on screen|on-screen|burned|graphic)/i.test(notes)) warns.push("ALL FRAMES HAVE TEXT");
+        else if (/blur/i.test(notes)) warns.push("ALL FRAMES BLURRY");
+      }
+      // De-dup across labels (pro/flash both can flag the same thing)
+      for (const w of warns) {
+        if (head.querySelector(`[data-warn="${w}"]`)) continue;
+        const pill = mkTag(w, "tag tag-warn");
+        pill.dataset.warn = w;
+        pill.title = `${lbl.toUpperCase()}: ${notes}`;
+        head.appendChild(pill);
+      }
+    }
   }
   if (v.parent_folder_link) {
     const fl = document.createElement("a");
@@ -1615,32 +1675,11 @@ function buildCard(v) {
   head.appendChild(pill);
   card.appendChild(head);
 
-  // Reclassification banners: when Gemini's detected content_type differs
-  // from the rule-based suspected one, show that prominently.
-  for (const lbl of labelOrder) {
-    const data = v.labels[lbl];
-    if (!data) continue;
-    const suspected = data.content_type;
-    const detected = data.detected_content_type;
-    if (detected && suspected && detected !== suspected) {
-      const note = document.createElement("div");
-      note.className = "gemini-notes flag-mismatch";
-      const reasoning = data.content_type_reasoning || "";
-      note.innerHTML = `<span class="gemini-notes-label">${esc(lbl.toUpperCase())} · RECLASSIFIED · ${esc(suspected)} → ${esc(detected)}</span>${escHtml(reasoning)}`;
-      card.appendChild(note);
-    }
-  }
-
-  // Generic Gemini commentary (the `notes` field — separate from reclassification).
-  for (const lbl of labelOrder) {
-    const data = v.labels[lbl];
-    const text = (data && data.gemini_notes || "").trim();
-    if (!text) continue;
-    const note = document.createElement("div");
-    note.className = "gemini-notes";
-    note.innerHTML = `<span class="gemini-notes-label">${esc(lbl.toUpperCase())} · COMMENTARY FROM GEMINI</span>${escHtml(text)}`;
-    card.appendChild(note);
-  }
+  // Reclassification + Gemini commentary surfaced as compact header pills
+  // above (NO CLEAN CUT / RECLASSIFIED → x / ALL FRAMES HAVE TEXT / etc.).
+  // Hover any pill to see the full Gemini reasoning that produced it.
+  // The previous full-width banner version was visually noisy — almost every
+  // video had reasoning text; only a fraction had actionable warnings.
 
   for (const lbl of labelOrder) {
     if (!v.labels[lbl]) continue;
